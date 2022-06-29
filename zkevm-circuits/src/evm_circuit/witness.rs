@@ -903,7 +903,6 @@ impl Rw {
             Self::AccountStorage { value, .. } | Self::Stack { value, .. } => {
                 RandomLinearCombination::random_linear_combine(value.to_le_bytes(), randomness)
             }
-
             Self::TxLog {
                 field_tag, value, ..
             } => match field_tag {
