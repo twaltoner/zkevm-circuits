@@ -1,20 +1,22 @@
 use super::{StateCircuit, StateConfig};
-use crate::evm_circuit::{
-    table::{AccountFieldTag, CallContextFieldTag, RwTableTag, TxLogFieldTag},
-    witness::{Rw, RwMap},
-};
 use crate::state_circuit::binary_number::AsBits;
+use crate::{
+    evm_circuit::{
+        table::{AccountFieldTag, CallContextFieldTag, RwTableTag, TxLogFieldTag},
+        witness::{Rw, RwMap},
+    },
+    util::DEFAULT_RAND,
+};
 use bus_mapping::operation::{
     MemoryOp, Operation, OperationContainer, RWCounter, StackOp, StorageOp, RW,
 };
 use eth_types::{
     address,
     evm_types::{MemoryAddress, StackAddress},
-    Address, ToAddress, Word, U256,
+    Address, Field, ToAddress, Word, U256,
 };
-use halo2_proofs::poly::commitment::Params;
+use halo2_proofs::{arithmetic::FieldExt, poly::commitment::Params};
 use halo2_proofs::{
-    arithmetic::BaseExt,
     dev::{MockProver, VerifyFailure},
     pairing::bn256::{Bn256, Fr, G1Affine},
     plonk::{keygen_vk, Advice, Circuit, Column, ConstraintSystem},
@@ -24,7 +26,7 @@ use strum::IntoEnumIterator;
 
 const N_ROWS: usize = 1 << 16;
 
-#[derive(Hash, Eq, PartialEq)]
+#[derive(Hash, Eq, PartialEq, Clone)]
 pub enum AdviceColumn {
     IsWrite,
     Address,
@@ -49,7 +51,10 @@ pub enum AdviceColumn {
 }
 
 impl AdviceColumn {
-    pub fn value(&self, config: &StateConfig) -> Column<Advice> {
+    pub fn value<F: Field, const QUICK_CHECK: bool>(
+        &self,
+        config: &StateConfig<F, QUICK_CHECK>,
+    ) -> Column<Advice> {
         match self {
             Self::IsWrite => config.is_write,
             Self::Address => config.sort_keys.address.value,
@@ -87,11 +92,12 @@ fn test_state_circuit_ok(
         ..Default::default()
     });
 
-    let randomness = Fr::rand();
+    let randomness = Fr::from_u128(DEFAULT_RAND);
     let circuit = StateCircuit::<Fr, N_ROWS>::new(randomness, rw_map);
     let power_of_randomness = circuit.instance();
 
-    let prover = MockProver::<Fr>::run(19, &circuit, power_of_randomness).unwrap();
+    let prover =
+        MockProver::<Fr>::run(circuit.estimate_k(), &circuit, power_of_randomness).unwrap();
     let verify_result = prover.verify();
     assert_eq!(verify_result, Ok(()));
 }
@@ -105,7 +111,7 @@ fn degree() {
 
 #[test]
 fn verifying_key_independent_of_rw_length() {
-    let randomness = Fr::rand();
+    let randomness = Fr::from_u128(DEFAULT_RAND);
     let degree = 17;
     let params = Params::<G1Affine>::unsafe_setup::<Bn256>(degree);
 
@@ -166,7 +172,7 @@ fn state_circuit_simple_2() {
     );
 
     let storage_op_0 = Operation::new(
-        RWCounter::from(0),
+        RWCounter::from(1),
         RW::WRITE,
         StorageOp::new(
             U256::from(100).to_address(),
@@ -327,7 +333,7 @@ fn storage_key_rlc() {
         account_address: Address::default(),
         storage_key: U256::from(256),
         value: U256::zero(),
-        value_prev: U256::zero(),
+        value_prev: U256::from(5),
         tx_id: 4,
         committed_value: U256::from(5),
     }];
@@ -456,7 +462,7 @@ fn storage_key_mismatch() {
         account_address: Address::default(),
         storage_key: U256::from(6),
         value: U256::zero(),
-        value_prev: U256::zero(),
+        value_prev: U256::from(5),
         tx_id: 4,
         committed_value: U256::from(5),
     }];
@@ -475,7 +481,7 @@ fn storage_key_byte_out_of_range() {
         account_address: Address::default(),
         storage_key: U256::from(256),
         value: U256::zero(),
-        value_prev: U256::zero(),
+        value_prev: U256::from(5),
         tx_id: 4,
         committed_value: U256::from(5),
     }];
@@ -513,7 +519,7 @@ fn nonlexicographic_order_tag() {
         is_write: true,
         call_id: 1,
         memory_address: 10,
-        byte: 12,
+        byte: 0,
     };
     let second = Rw::CallContext {
         rw_counter: 2,
@@ -585,7 +591,7 @@ fn nonlexicographic_order_address() {
         account_address: address!("0x2000000000000000000000000000000000000000"),
         field_tag: AccountFieldTag::CodeHash,
         value: U256::one(),
-        value_prev: U256::one(),
+        value_prev: U256::zero(),
     };
 
     assert_eq!(verify(vec![first, second]), Ok(()));
@@ -600,7 +606,7 @@ fn nonlexicographic_order_storage_key_upper() {
         account_address: Address::default(),
         storage_key: U256::zero(),
         value: U256::zero(),
-        value_prev: U256::zero(),
+        value_prev: U256::from(5),
         tx_id: 4,
         committed_value: U256::from(5),
     };
@@ -610,7 +616,7 @@ fn nonlexicographic_order_storage_key_upper() {
         account_address: Address::default(),
         storage_key: U256::MAX - U256::one(),
         value: U256::zero(),
-        value_prev: U256::zero(),
+        value_prev: U256::from(5),
         tx_id: 4,
         committed_value: U256::from(5),
     };
@@ -627,7 +633,7 @@ fn nonlexicographic_order_storage_key_lower() {
         account_address: Address::default(),
         storage_key: U256::zero(),
         value: U256::zero(),
-        value_prev: U256::zero(),
+        value_prev: U256::from(5),
         tx_id: 4,
         committed_value: U256::from(5),
     };
@@ -637,7 +643,7 @@ fn nonlexicographic_order_storage_key_lower() {
         account_address: Address::default(),
         storage_key: U256::one(),
         value: U256::zero(),
-        value_prev: U256::zero(),
+        value_prev: U256::from(5),
         tx_id: 4,
         committed_value: U256::from(5),
     };
@@ -881,7 +887,8 @@ fn invalid_tags() {
 }
 
 fn prover(rows: Vec<Rw>, overrides: HashMap<(AdviceColumn, isize), Fr>) -> MockProver<Fr> {
-    let randomness = Fr::rand();
+    let randomness = Fr::from_u128(DEFAULT_RAND);
+
     let circuit = StateCircuit::<Fr, N_ROWS> {
         randomness,
         rows,
@@ -889,7 +896,7 @@ fn prover(rows: Vec<Rw>, overrides: HashMap<(AdviceColumn, isize), Fr>) -> MockP
     };
     let power_of_randomness = circuit.instance();
 
-    MockProver::<Fr>::run(17, &circuit, power_of_randomness).unwrap()
+    MockProver::<Fr>::run(circuit.estimate_k(), &circuit, power_of_randomness).unwrap()
 }
 
 fn verify(rows: Vec<Rw>) -> Result<(), Vec<VerifyFailure>> {
@@ -914,6 +921,18 @@ fn verify_with_overrides(
 
 fn assert_error_matches(result: Result<(), Vec<VerifyFailure>>, name: &str) {
     let errors = result.err().expect("result is not an error");
+    let errors: Vec<_> = errors
+        .iter()
+        .filter(|e| {
+            if let VerifyFailure::ConstraintNotSatisfied { constraint, .. } = e {
+                let constraint = format!("{}", constraint);
+                if constraint.contains("rw table rlc") {
+                    return false;
+                }
+            }
+            true
+        })
+        .collect();
     assert_eq!(errors.len(), 1, "{:?}", errors);
     match &errors[0] {
         VerifyFailure::ConstraintNotSatisfied { constraint, .. } => {
