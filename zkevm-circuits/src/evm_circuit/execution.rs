@@ -64,6 +64,7 @@ mod origin;
 mod pc;
 mod pop;
 mod push;
+mod r#return;
 mod selfbalance;
 mod shr;
 mod signed_comparator;
@@ -113,6 +114,7 @@ use origin::OriginGadget;
 use pc::PcGadget;
 use pop::PopGadget;
 use push::PushGadget;
+use r#return::ReturnGadget;
 use selfbalance::SelfbalanceGadget;
 use shr::ShrGadget;
 use signed_comparator::SignedComparatorGadget;
@@ -194,10 +196,28 @@ pub(crate) struct ExecutionConfig<F> {
     pc_gadget: PcGadget<F>,
     pop_gadget: PopGadget<F>,
     push_gadget: PushGadget<F>,
+    return_gadget: ReturnGadget<F>,
     selfbalance_gadget: SelfbalanceGadget<F>,
     shr_gadget: ShrGadget<F>,
-    shl_gadget: DummyGadget<F, 2, 1, { ExecutionState::SHL }>,
     sha3_gadget: DummyGadget<F, 2, 1, { ExecutionState::SHA3 }>,
+    address_gadget: DummyGadget<F, 0, 1, { ExecutionState::ADDRESS }>,
+    balance_gadget: DummyGadget<F, 1, 1, { ExecutionState::BALANCE }>,
+    blockhash_gadget: DummyGadget<F, 1, 1, { ExecutionState::BLOCKHASH }>,
+    sdiv_gadget: DummyGadget<F, 2, 1, { ExecutionState::SDIV }>,
+    smod_gadget: DummyGadget<F, 2, 1, { ExecutionState::SMOD }>,
+    exp_gadget: DummyGadget<F, 2, 1, { ExecutionState::EXP }>,
+    shl_gadget: DummyGadget<F, 2, 1, { ExecutionState::SHL }>,
+    sar_gadget: DummyGadget<F, 2, 1, { ExecutionState::SAR }>,
+    extcodesize_gadget: DummyGadget<F, 1, 1, { ExecutionState::EXTCODESIZE }>,
+    extcodecopy_gadget: DummyGadget<F, 4, 0, { ExecutionState::EXTCODECOPY }>,
+    returndatasize_gadget: DummyGadget<F, 0, 1, { ExecutionState::RETURNDATASIZE }>,
+    returndatacopy_gadget: DummyGadget<F, 3, 0, { ExecutionState::RETURNDATACOPY }>,
+    create_gadget: DummyGadget<F, 3, 1, { ExecutionState::CREATE }>,
+    callcode_gadget: DummyGadget<F, 7, 1, { ExecutionState::CALLCODE }>,
+    delegatecall_gadget: DummyGadget<F, 6, 1, { ExecutionState::DELEGATECALL }>,
+    create2_gadget: DummyGadget<F, 4, 1, { ExecutionState::CREATE2 }>,
+    staticcall_gadget: DummyGadget<F, 6, 1, { ExecutionState::STATICCALL }>,
+    selfdestruct_gadget: DummyGadget<F, 1, 0, { ExecutionState::SELFDESTRUCT }>,
     signed_comparator_gadget: SignedComparatorGadget<F>,
     signextend_gadget: SignextendGadget<F>,
     sload_gadget: SloadGadget<F>,
@@ -288,7 +308,6 @@ impl<F: Field> ExecutionConfig<F> {
                         q_usable.clone() * q_used.clone() * q_step.clone() * poly,
                     )
                 })
-            // TODO: Enable these after test of CALLDATACOPY is complete.
             // .chain(first_step_check)
             // .chain(last_step_check)
         });
@@ -403,9 +422,27 @@ impl<F: Field> ExecutionConfig<F> {
             pc_gadget: configure_gadget!(),
             pop_gadget: configure_gadget!(),
             push_gadget: configure_gadget!(),
+            return_gadget: configure_gadget!(),
             selfbalance_gadget: configure_gadget!(),
             sha3_gadget: configure_gadget!(),
+            address_gadget: configure_gadget!(),
+            balance_gadget: configure_gadget!(),
+            blockhash_gadget: configure_gadget!(),
+            sdiv_gadget: configure_gadget!(),
+            smod_gadget: configure_gadget!(),
+            exp_gadget: configure_gadget!(),
             shl_gadget: configure_gadget!(),
+            sar_gadget: configure_gadget!(),
+            extcodesize_gadget: configure_gadget!(),
+            extcodecopy_gadget: configure_gadget!(),
+            returndatasize_gadget: configure_gadget!(),
+            returndatacopy_gadget: configure_gadget!(),
+            create_gadget: configure_gadget!(),
+            callcode_gadget: configure_gadget!(),
+            delegatecall_gadget: configure_gadget!(),
+            create2_gadget: configure_gadget!(),
+            staticcall_gadget: configure_gadget!(),
+            selfdestruct_gadget: configure_gadget!(),
             shr_gadget: configure_gadget!(),
             signed_comparator_gadget: configure_gadget!(),
             signextend_gadget: configure_gadget!(),
@@ -895,16 +932,36 @@ impl<F: Field> ExecutionConfig<F> {
             ExecutionState::PC => assign_exec_step!(self.pc_gadget),
             ExecutionState::POP => assign_exec_step!(self.pop_gadget),
             ExecutionState::PUSH => assign_exec_step!(self.push_gadget),
+            ExecutionState::RETURN => assign_exec_step!(self.return_gadget),
             ExecutionState::SCMP => assign_exec_step!(self.signed_comparator_gadget),
             ExecutionState::BLOCKCTXU64 => assign_exec_step!(self.block_ctx_u64_gadget),
             ExecutionState::BLOCKCTXU160 => assign_exec_step!(self.block_ctx_u160_gadget),
             ExecutionState::BLOCKCTXU256 => assign_exec_step!(self.block_ctx_u256_gadget),
             ExecutionState::SELFBALANCE => assign_exec_step!(self.selfbalance_gadget),
+            // dummy gadgets
             ExecutionState::SHA3 => assign_exec_step!(self.sha3_gadget),
+            ExecutionState::ADDRESS => assign_exec_step!(self.address_gadget),
+            ExecutionState::BALANCE => assign_exec_step!(self.balance_gadget),
+            ExecutionState::BLOCKHASH => assign_exec_step!(self.blockhash_gadget),
+            ExecutionState::SDIV => assign_exec_step!(self.sdiv_gadget),
+            ExecutionState::SMOD => assign_exec_step!(self.smod_gadget),
+            ExecutionState::EXP => assign_exec_step!(self.exp_gadget),
+            ExecutionState::SHL => assign_exec_step!(self.shl_gadget),
+            ExecutionState::SAR => assign_exec_step!(self.sar_gadget),
+            ExecutionState::EXTCODESIZE => assign_exec_step!(self.extcodesize_gadget),
+            ExecutionState::EXTCODECOPY => assign_exec_step!(self.extcodecopy_gadget),
+            ExecutionState::RETURNDATASIZE => assign_exec_step!(self.returndatasize_gadget),
+            ExecutionState::RETURNDATACOPY => assign_exec_step!(self.returndatacopy_gadget),
+            ExecutionState::CREATE => assign_exec_step!(self.create_gadget),
+            ExecutionState::CALLCODE => assign_exec_step!(self.callcode_gadget),
+            ExecutionState::DELEGATECALL => assign_exec_step!(self.delegatecall_gadget),
+            ExecutionState::CREATE2 => assign_exec_step!(self.create2_gadget),
+            ExecutionState::STATICCALL => assign_exec_step!(self.staticcall_gadget),
+            ExecutionState::SELFDESTRUCT => assign_exec_step!(self.selfdestruct_gadget),
+            // end of dummy gadgets
             ExecutionState::SHR => assign_exec_step!(self.shr_gadget),
             ExecutionState::SIGNEXTEND => assign_exec_step!(self.signextend_gadget),
             ExecutionState::SLOAD => assign_exec_step!(self.sload_gadget),
-            ExecutionState::SHL => assign_exec_step!(self.shl_gadget),
             ExecutionState::SSTORE => assign_exec_step!(self.sstore_gadget),
             ExecutionState::STOP => assign_exec_step!(self.stop_gadget),
             ExecutionState::SWAP => assign_exec_step!(self.swap_gadget),
@@ -918,7 +975,7 @@ impl<F: Field> ExecutionConfig<F> {
             ExecutionState::DUMMY => {
                 assign_exec_step!(self.dummy_gadget)
             }
-            _ => unimplemented!(),
+            _ => unimplemented!("unimplemented ExecutionState: {:?}", step.execution_state),
         }
 
         // Fill in the witness values for stored expressions

@@ -254,10 +254,10 @@ pub mod test {
             )
         }
 
-        fn load_bytecodes(
+        fn load_bytecodes<'a>(
             &self,
             layouter: &mut impl Layouter<F>,
-            bytecodes: &[Bytecode],
+            bytecodes: impl IntoIterator<Item = &'a Bytecode> + Clone,
             randomness: F,
         ) -> Result<(), Error> {
             layouter.assign_region(
@@ -274,7 +274,7 @@ pub mod test {
                     }
                     offset += 1;
 
-                    for bytecode in bytecodes.iter() {
+                    for bytecode in bytecodes.clone() {
                         for row in bytecode.table_assignments(randomness) {
                             for (column, value) in self.bytecode_table.iter().zip_eq(row) {
                                 region.assign_advice(
@@ -384,7 +384,7 @@ pub mod test {
                 64 + self
                     .block
                     .bytecodes
-                    .iter()
+                    .values()
                     .map(|bytecode| bytecode.bytes.len())
                     .sum::<usize>(),
             ));
@@ -440,7 +440,11 @@ pub mod test {
             config.evm_circuit.load_byte_table(&mut layouter)?;
             config.load_txs(&mut layouter, &self.block.txs, self.block.randomness)?;
             config.load_rws(&mut layouter, &self.block.rws, self.block.randomness)?;
-            config.load_bytecodes(&mut layouter, &self.block.bytecodes, self.block.randomness)?;
+            config.load_bytecodes(
+                &mut layouter,
+                self.block.bytecodes.values(),
+                self.block.randomness,
+            )?;
             config.load_block(&mut layouter, &self.block.context, self.block.randomness)?;
             if self.block.pad_to != 0 {
                 config.evm_circuit.assign_block(&mut layouter, &self.block)

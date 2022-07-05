@@ -233,7 +233,7 @@ pub mod test {
         step::ExecutionState,
         table::{RwTableTag, TxLogFieldTag},
         test::{rand_bytes, run_test_circuit_incomplete_fixed_table},
-        witness::{Block, Bytecode, Call, CodeSource, ExecStep, Rw, RwMap, Transaction},
+        witness::{Block, Bytecode, Call, ExecStep, Rw, RwMap, Transaction},
     };
     use crate::util::DEFAULT_RAND;
     use bus_mapping::{
@@ -385,7 +385,7 @@ pub mod test {
 
     fn test_ok_copy_to_log(src_addr: u64, src_addr_end: u64, length: usize, is_persistent: bool) {
         let randomness = Fr::from_u128(DEFAULT_RAND);
-        let bytecode = Bytecode::new(vec![OpcodeId::STOP.as_u8()]);
+        let bytecode = Bytecode::new(vec![OpcodeId::RETURN.as_u8()]);
         let call_id = 1;
         let mut rws = RwMap(Default::default());
         let mut rw_counter = 1;
@@ -413,12 +413,12 @@ pub mod test {
         );
 
         steps.push(ExecStep {
-            execution_state: ExecutionState::STOP,
+            execution_state: ExecutionState::RETURN,
             rw_counter,
             program_counter: 0,
             stack_pointer: 1023,
             memory_size,
-            opcode: Some(OpcodeId::STOP),
+            opcode: Some(OpcodeId::RETURN),
             ..Default::default()
         });
 
@@ -430,14 +430,14 @@ pub mod test {
                     id: call_id,
                     is_root: false,
                     is_create: false,
-                    code_source: CodeSource::Account(bytecode.hash),
+                    code_hash: bytecode.hash,
                     ..Default::default()
                 }],
                 steps,
                 ..Default::default()
             }],
             rws,
-            bytecodes: vec![bytecode],
+            bytecodes: HashMap::from_iter([(bytecode.hash, bytecode)]),
             ..Default::default()
         };
         assert_eq!(run_test_circuit_incomplete_fixed_table(block), Ok(()));
