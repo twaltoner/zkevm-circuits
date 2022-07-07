@@ -231,6 +231,7 @@ pub enum CallContextFieldTag {
     IsRoot,
     IsCreate,
     CodeHash,
+    CodeHash,
     ProgramCounter,
     StackPointer,
     GasLeft,

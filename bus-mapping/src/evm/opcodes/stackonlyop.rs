@@ -1,5 +1,6 @@
 use super::Opcode;
 use crate::circuit_input_builder::{CircuitInputStateRef, ExecStep};
+use crate::error::{get_step_reported_error, ExecError};
 use crate::Error;
 use eth_types::GethExecStep;
 
@@ -20,21 +21,29 @@ impl<const N_POP: usize, const N_PUSH: usize> Opcode for StackOnlyOpcode<N_POP, 
         let geth_step = &geth_steps[0];
         let mut exec_step = state.new_step(geth_step)?;
         // N_POP stack reads
-        for i in 0..N_POP {
-            state.stack_read(
-                &mut exec_step,
-                geth_step.stack.nth_last_filled(i),
-                geth_step.stack.nth_last(i)?,
-            )?;
-        }
+        if let Some(error) = geth_step.clone().error {
+            let execution_error: ExecError = get_step_reported_error(&geth_step.op, &error);
+            println!("{}", error);
+            exec_step.error = Some(execution_error);
+            state.handle_return(geth_step)?;
+            // exec_step.exec_state =
+        } else {
+            for i in 0..N_POP {
+                state.stack_read(
+                    &mut exec_step,
+                    geth_step.stack.nth_last_filled(i),
+                    geth_step.stack.nth_last(i)?,
+                )?;
+            }
 
-        // N_PUSH stack writes
-        for i in 0..N_PUSH {
-            state.stack_write(
-                &mut exec_step,
-                geth_steps[1].stack.nth_last_filled(N_PUSH - 1 - i),
-                geth_steps[1].stack.nth_last(N_PUSH - 1 - i)?,
-            )?;
+            // N_PUSH stack writes
+            for i in 0..N_PUSH {
+                state.stack_write(
+                    &mut exec_step,
+                    geth_steps[1].stack.nth_last_filled(N_PUSH - 1 - i),
+                    geth_steps[1].stack.nth_last(N_PUSH - 1 - i)?,
+                )?;
+            }
         }
 
         Ok(vec![exec_step])

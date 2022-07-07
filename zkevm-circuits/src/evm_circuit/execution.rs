@@ -45,6 +45,7 @@ mod dummy;
 mod dup;
 mod end_block;
 mod end_tx;
+mod error_oog_constant;
 mod error_oog_static_memory;
 mod extcodehash;
 mod gas;
@@ -97,6 +98,7 @@ use dummy::DummyGadget;
 use dup::DupGadget;
 use end_block::EndBlockGadget;
 use end_tx::EndTxGadget;
+use error_oog_constant::ErrorOOGConstantGadget;
 use error_oog_static_memory::ErrorOOGStaticMemoryGadget;
 use extcodehash::ExtcodehashGadget;
 use gas::GasGadget;
@@ -229,6 +231,10 @@ pub(crate) struct ExecutionConfig<F> {
     block_ctx_u160_gadget: BlockCtxU160Gadget<F>,
     block_ctx_u256_gadget: BlockCtxU256Gadget<F>,
     // error gadgets
+    error_oog_constant: ErrorOOGConstantGadget<F>,
+    error_stack_overflow: DummyGadget<F, 0, 0, { ExecutionState::ErrorStackOverflow }>,
+    error_stack_underflow: DummyGadget<F, 0, 0, { ExecutionState::ErrorStackUnderflow }>,
+    // pass error_oog_constant: DummyGadget<F, 0, 0, { ExecutionState::ErrorOutOfGasConstant }>,
     error_oog_static_memory_gadget: ErrorOOGStaticMemoryGadget<F>,
     invalid_opcode_gadget: DummyGadget<F, 0, 0, { ExecutionState::ErrorInvalidOpcode }>,
 }
@@ -454,6 +460,9 @@ impl<F: Field> ExecutionConfig<F> {
             block_ctx_u160_gadget: configure_gadget!(),
             block_ctx_u256_gadget: configure_gadget!(),
             // error gadgets
+            error_oog_constant: configure_gadget!(),
+            error_stack_overflow: configure_gadget!(),
+            error_stack_underflow: configure_gadget!(),
             error_oog_static_memory_gadget: configure_gadget!(),
             invalid_opcode_gadget: configure_gadget!(),
             // step and presets
@@ -967,6 +976,15 @@ impl<F: Field> ExecutionConfig<F> {
             // errors
             ExecutionState::ErrorOutOfGasStaticMemoryExpansion => {
                 assign_exec_step!(self.error_oog_static_memory_gadget)
+            }
+            ExecutionState::ErrorOutOfGasConstant => {
+                assign_exec_step!(self.error_oog_constant)
+            }
+            ExecutionState::ErrorStackOverflow => {
+                assign_exec_step!(self.error_stack_overflow)
+            }
+            ExecutionState::ErrorStackUnderflow => {
+                assign_exec_step!(self.error_stack_underflow)
             }
             ExecutionState::ErrorInvalidOpcode => {
                 assign_exec_step!(self.dummy_gadget)
