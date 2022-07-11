@@ -1,5 +1,6 @@
 use super::Opcode;
 use crate::circuit_input_builder::{CircuitInputStateRef, ExecStep};
+use crate::error::{get_step_reported_error, ExecError};
 use crate::Error;
 use core::convert::TryInto;
 use eth_types::evm_types::MemoryAddress;
@@ -20,6 +21,14 @@ impl Opcode for Mload {
     ) -> Result<Vec<ExecStep>, Error> {
         let geth_step = &geth_steps[0];
         let mut exec_step = state.new_step(geth_step)?;
+        // handle oog StaticMemoryExpansion error
+        if let Some(error) = geth_step.clone().error {
+            let execution_error: ExecError = get_step_reported_error(&geth_step.op, &error);
+            log::warn!("geth error {} occurred in mload", error);
+            exec_step.error = Some(execution_error);
+            state.handle_return(geth_step)?;
+            return Ok(vec![exec_step]);
+        }
         //
         // First stack read
         //

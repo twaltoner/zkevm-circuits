@@ -23,10 +23,9 @@ impl<const N_POP: usize, const N_PUSH: usize> Opcode for StackOnlyOpcode<N_POP, 
         // N_POP stack reads
         if let Some(error) = geth_step.clone().error {
             let execution_error: ExecError = get_step_reported_error(&geth_step.op, &error);
-            println!("{}", error);
+            log::warn!("geth error {} occurred in execution", error);
             exec_step.error = Some(execution_error);
             state.handle_return(geth_step)?;
-            // exec_step.exec_state =
         } else {
             for i in 0..N_POP {
                 state.stack_read(
