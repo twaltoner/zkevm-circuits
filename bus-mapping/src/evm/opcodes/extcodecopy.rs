@@ -1,19 +1,16 @@
-use crate::{
-    circuit_input_builder::{
-        CircuitInputStateRef, CopyDetails, ExecState, ExecStep, StepAuxiliaryData,
-    },
-    constants::MAX_COPY_BYTES,
-    Error,
-};
-use eth_types::evm_types::Memory;
-use eth_types::{GethExecStep, ToWord};
-
 use super::Opcode;
+use crate::circuit_input_builder::{
+    CircuitInputStateRef, CopyDetails, ExecState, ExecStep, StepAuxiliaryData,
+};
+use crate::constants::MAX_COPY_BYTES;
+use crate::Error;
+use eth_types::evm_types::Memory;
+use eth_types::{GethExecStep, ToAddress, ToWord};
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct Codecopy;
+pub(crate) struct Extcodecopy;
 
-impl Opcode for Codecopy {
+impl Opcode for Extcodecopy {
     fn gen_associated_ops(
         &self,
         state: &mut CircuitInputStateRef,
@@ -31,11 +28,12 @@ impl Opcode for Codecopy {
         state: &mut CircuitInputStateRef,
         geth_steps: &[GethExecStep],
     ) -> Result<Memory, Error> {
-        let dest_offset = geth_steps[0].stack.nth_last(0)?.as_u64();
-        let code_offset = geth_steps[0].stack.nth_last(1)?.as_u64();
-        let length = geth_steps[0].stack.nth_last(2)?.as_u64();
+        let address = geth_steps[0].stack.nth_last(0)?.to_address();
+        let dest_offset = geth_steps[0].stack.nth_last(1)?.as_u64();
+        let code_offset = geth_steps[0].stack.nth_last(2)?.as_u64();
+        let length = geth_steps[0].stack.nth_last(3)?.as_u64();
 
-        let code_hash = state.call()?.code_hash;
+        let code_hash = state.code_hash(address)?;
         let code = state.code(code_hash)?;
 
         let mut memory = geth_steps[0].memory.borrow().clone();
@@ -66,23 +64,20 @@ fn gen_codecopy_step(
 ) -> Result<ExecStep, Error> {
     let mut exec_step = state.new_step(geth_step)?;
 
-    let dest_offset = geth_step.stack.nth_last(0)?;
-    let code_offset = geth_step.stack.nth_last(1)?;
-    let length = geth_step.stack.nth_last(2)?;
+    let address = geth_step.stack.nth_last(0)?;
+    let dest_offset = geth_step.stack.nth_last(1)?;
+    let offset = geth_step.stack.nth_last(2)?;
+    let length = geth_step.stack.nth_last(3)?;
 
     // stack reads
-    state.stack_read(
-        &mut exec_step,
-        geth_step.stack.nth_last_filled(0),
-        dest_offset,
-    )?;
+    state.stack_read(&mut exec_step, geth_step.stack.nth_last_filled(0), address)?;
     state.stack_read(
         &mut exec_step,
         geth_step.stack.nth_last_filled(1),
-        code_offset,
+        dest_offset,
     )?;
-    state.stack_read(&mut exec_step, geth_step.stack.nth_last_filled(2), length)?;
-
+    state.stack_read(&mut exec_step, geth_step.stack.nth_last_filled(2), offset)?;
+    state.stack_read(&mut exec_step, geth_step.stack.nth_last_filled(3), length)?;
     Ok(exec_step)
 }
 
@@ -111,15 +106,16 @@ fn gen_memory_copy_steps(
     state: &mut CircuitInputStateRef,
     geth_steps: &[GethExecStep],
 ) -> Result<Vec<ExecStep>, Error> {
-    let dest_offset = geth_steps[0].stack.nth_last(0)?.as_u64();
-    let code_offset = geth_steps[0].stack.nth_last(1)?.as_u64();
-    let length = geth_steps[0].stack.nth_last(2)?.as_u64();
+    let address = geth_steps[0].stack.nth_last(0)?.to_address();
+    let dest_offset = geth_steps[0].stack.nth_last(1)?.as_u64();
+    let code_offset = geth_steps[0].stack.nth_last(2)?.as_u64();
+    let length = geth_steps[0].stack.nth_last(3)?.as_u64();
 
-    let code_hash = state.call()?.code_hash;
+    let code_hash = state.code_hash(address)?;
     let code = state.code(code_hash)?;
     let src_addr_end = code.len() as u64;
 
-    let code_hash = code_hash.to_word();
+    let code_source = code_hash.to_word();
     let mut copied = 0;
     let mut steps = vec![];
     while copied < length {
@@ -133,7 +129,7 @@ fn gen_memory_copy_steps(
                 dest_offset + copied,
                 length - copied,
                 src_addr_end,
-                CopyDetails::Code(code_hash),
+                CopyDetails::Code(code_source),
             ),
             &code,
         )?;
@@ -145,43 +141,57 @@ fn gen_memory_copy_steps(
 }
 
 #[cfg(test)]
-mod codecopy_tests {
-    use eth_types::{
-        bytecode,
-        evm_types::{MemoryAddress, OpcodeId, StackAddress},
-        geth_types::GethData,
-        Word,
-    };
-    use mock::{
-        test_ctx::helpers::{account_0_code_account_1_no_code, tx_from_1_to_0},
-        TestContext,
-    };
-
-    use crate::{
-        mock::BlockData,
-        operation::{MemoryOp, StackOp, RW},
-    };
-
-    use super::*;
+mod extcodecopy_tests {
+    use crate::mock::BlockData;
+    use eth_types::geth_types::GethData;
+    use eth_types::{bytecode, word};
+    use mock::test_ctx::helpers::{account_0_code_account_1_no_code, tx_from_1_to_0};
+    use mock::TestContext;
 
     #[test]
-    fn codecopy_opcode_impl() {
-        test_ok(0x00, 0x00, 0x40);
-        test_ok(0x20, 0x40, 0xA0);
-    }
-
-    fn test_ok(dest_offset: usize, code_offset: usize, size: usize) {
+    fn test_ok() {
+        // // deployed contract
+        // PUSH1 0x20
+        // PUSH1 0
+        // PUSH1 0
+        // CALLDATACOPY
+        // PUSH1 0x20
+        // PUSH1 0
+        // RETURN
+        //
+        // bytecode: 0x6020600060003760206000F3
+        //
+        // // constructor
+        // PUSH12 0x6020600060003760206000F3
+        // PUSH1 0
+        // MSTORE
+        // PUSH1 0xC
+        // PUSH1 0x14
+        // RETURN
+        //
+        // bytecode: 0x6B6020600060003760206000F3600052600C6014F3
         let code = bytecode! {
-            PUSH32(size)
-            PUSH32(code_offset)
-            PUSH32(dest_offset)
-            CODECOPY
+            PUSH21(word!("6B6020600060003760206000F3600052600C6014F3"))
+            PUSH1(0)
+            MSTORE
+
+            PUSH1 (0x15)
+            PUSH1 (0xB)
+            PUSH1 (0)
+            CREATE
+
+            PUSH1 (0x20)
+            PUSH1 (0x0)
+            PUSH1 (0x20)
+            DUP4
+            EXTCODECOPY
+
             STOP
         };
-
+        // Get the execution steps from the external tracer
         let block: GethData = TestContext::<2, 1>::new(
             None,
-            account_0_code_account_1_no_code(code.clone()),
+            account_0_code_account_1_no_code(code),
             tx_from_1_to_0,
             |block, _tx| block.number(0xcafeu64),
         )
@@ -192,53 +202,5 @@ mod codecopy_tests {
         builder
             .handle_block(&block.eth_block, &block.geth_traces)
             .unwrap();
-
-        let step = builder.block.txs()[0]
-            .steps()
-            .iter()
-            .find(|step| step.exec_state == ExecState::Op(OpcodeId::CODECOPY))
-            .unwrap();
-
-        assert_eq!(
-            [0, 1, 2]
-                .map(|idx| &builder.block.container.stack[step.bus_mapping_instance[idx].as_usize()])
-                .map(|op| (op.rw(), op.op())),
-            [
-                (
-                    RW::READ,
-                    &StackOp::new(1, StackAddress::from(1021), Word::from(dest_offset)),
-                ),
-                (
-                    RW::READ,
-                    &StackOp::new(1, StackAddress::from(1022), Word::from(code_offset)),
-                ),
-                (
-                    RW::READ,
-                    &StackOp::new(1, StackAddress::from(1023), Word::from(size)),
-                ),
-            ]
-        );
-        assert_eq!(
-            (0..size)
-                .map(|idx| &builder.block.container.memory[idx])
-                .map(|op| (op.rw(), op.op().clone()))
-                .collect::<Vec<(RW, MemoryOp)>>(),
-            (0..size)
-                .map(|idx| {
-                    (
-                        RW::WRITE,
-                        MemoryOp::new(
-                            1,
-                            MemoryAddress::from(dest_offset + idx),
-                            if code_offset + idx < code.code().len() {
-                                code.code()[code_offset + idx]
-                            } else {
-                                0
-                            },
-                        ),
-                    )
-                })
-                .collect::<Vec<(RW, MemoryOp)>>(),
-        );
     }
 }
