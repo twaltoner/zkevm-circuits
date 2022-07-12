@@ -236,6 +236,14 @@ pub(crate) struct ExecutionConfig<F> {
     error_stack_underflow: DummyGadget<F, 0, 0, { ExecutionState::ErrorStackUnderflow }>,
     // pass error_oog_constant: DummyGadget<F, 0, 0, { ExecutionState::ErrorOutOfGasConstant }>,
     error_oog_static_memory_gadget: ErrorOOGStaticMemoryGadget<F>,
+    error_oog_dynamic_memory_gadget:
+        DummyGadget<F, 0, 0, { ExecutionState::ErrorOutOfGasDynamicMemoryExpansion }>,
+    error_oog_log: DummyGadget<F, 0, 0, { ExecutionState::ErrorOutOfGasLOG }>,
+    error_oog_sload: DummyGadget<F, 0, 0, { ExecutionState::ErrorOutOfGasSLOAD }>,
+    error_oog_sstore: DummyGadget<F, 0, 0, { ExecutionState::ErrorOutOfGasSSTORE }>,
+    error_oog_call: DummyGadget<F, 0, 0, { ExecutionState::ErrorOutOfGasCALL }>,
+    error_oog_memory_copy: DummyGadget<F, 0, 0, { ExecutionState::ErrorOutOfGasMemoryCopy }>,
+
     invalid_opcode_gadget: DummyGadget<F, 0, 0, { ExecutionState::ErrorInvalidOpcode }>,
 }
 
@@ -464,6 +472,12 @@ impl<F: Field> ExecutionConfig<F> {
             error_stack_overflow: configure_gadget!(),
             error_stack_underflow: configure_gadget!(),
             error_oog_static_memory_gadget: configure_gadget!(),
+            error_oog_dynamic_memory_gadget: configure_gadget!(),
+            error_oog_log: configure_gadget!(),
+            error_oog_sload: configure_gadget!(),
+            error_oog_sstore: configure_gadget!(),
+            error_oog_call: configure_gadget!(),
+            error_oog_memory_copy: configure_gadget!(),
             invalid_opcode_gadget: configure_gadget!(),
             // step and presets
             step: step_curr,
@@ -974,18 +988,38 @@ impl<F: Field> ExecutionConfig<F> {
             ExecutionState::STOP => assign_exec_step!(self.stop_gadget),
             ExecutionState::SWAP => assign_exec_step!(self.swap_gadget),
             // errors
-            ExecutionState::ErrorOutOfGasStaticMemoryExpansion => {
-                assign_exec_step!(self.error_oog_static_memory_gadget)
-            }
             ExecutionState::ErrorOutOfGasConstant => {
                 assign_exec_step!(self.error_oog_constant)
             }
+            ExecutionState::ErrorOutOfGasStaticMemoryExpansion => {
+                assign_exec_step!(self.error_oog_static_memory_gadget)
+            }
+            ExecutionState::ErrorOutOfGasDynamicMemoryExpansion => {
+                assign_exec_step!(self.error_oog_dynamic_memory_gadget)
+            }
+            ExecutionState::ErrorOutOfGasLOG => {
+                assign_exec_step!(self.error_oog_log)
+            }
+            ExecutionState::ErrorOutOfGasSLOAD => {
+                assign_exec_step!(self.error_oog_sload)
+            }
+            ExecutionState::ErrorOutOfGasSSTORE => {
+                assign_exec_step!(self.error_oog_sstore)
+            }
+            ExecutionState::ErrorOutOfGasCALL => {
+                assign_exec_step!(self.error_oog_call)
+            }
+            ExecutionState::ErrorOutOfGasMemoryCopy => {
+                assign_exec_step!(self.error_oog_memory_copy)
+            }
+
             ExecutionState::ErrorStackOverflow => {
                 assign_exec_step!(self.error_stack_overflow)
             }
             ExecutionState::ErrorStackUnderflow => {
                 assign_exec_step!(self.error_stack_underflow)
             }
+
             ExecutionState::ErrorInvalidOpcode => {
                 assign_exec_step!(self.dummy_gadget)
             }

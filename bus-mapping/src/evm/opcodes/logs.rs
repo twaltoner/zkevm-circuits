@@ -1,4 +1,5 @@
 use super::Opcode;
+use crate::error::{get_step_reported_error, ExecError};
 use crate::operation::{CallContextField, TxLogField};
 use crate::Error;
 use crate::{
@@ -20,6 +21,15 @@ impl Opcode for Log {
         geth_steps: &[GethExecStep],
     ) -> Result<Vec<ExecStep>, Error> {
         let geth_step = &geth_steps[0];
+        // handle error condition
+        if let Some(error) = geth_step.clone().error {
+            let mut exec_step = state.new_step(geth_step)?;
+            let execution_error: ExecError = get_step_reported_error(&geth_step.op, &error);
+            log::warn!("geth error {} occurred in log", error);
+            exec_step.error = Some(execution_error);
+            state.handle_return(geth_step)?;
+            return Ok(vec![exec_step]);
+        }
 
         let mut exec_steps = vec![gen_log_step(state, geth_step)?];
         let log_copy_steps = gen_log_copy_steps(state, geth_steps)?;
