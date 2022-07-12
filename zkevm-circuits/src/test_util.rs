@@ -99,7 +99,10 @@ pub fn test_circuits_using_witness_block(
             power_of_randomness,
         )
         .unwrap();
-        prover.verify_at_rows(0..state_circuit.rows.len(), 0..state_circuit.rows.len())?
+        prover.verify_at_rows(
+            N_ROWS - state_circuit.rows.len()..N_ROWS,
+            N_ROWS - state_circuit.rows.len()..N_ROWS,
+        )?
     }
 
     Ok(())
