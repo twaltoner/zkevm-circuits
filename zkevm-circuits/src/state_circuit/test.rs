@@ -1,6 +1,5 @@
 use super::{StateCircuit, StateConfig};
 use crate::evm_circuit::table::TxReceiptFieldTag;
-use crate::state_circuit::binary_number::AsBits;
 use crate::{
     evm_circuit::{
         table::{AccountFieldTag, CallContextFieldTag, RwTableTag, TxLogFieldTag},
@@ -16,6 +15,7 @@ use eth_types::{
     evm_types::{MemoryAddress, StackAddress},
     Address, Field, ToAddress, Word, U256,
 };
+use gadgets::binary_number::AsBits;
 use halo2_proofs::{arithmetic::FieldExt, poly::commitment::Params};
 use halo2_proofs::{
     dev::{MockProver, VerifyFailure},

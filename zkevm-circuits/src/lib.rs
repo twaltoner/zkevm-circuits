@@ -23,3 +23,5 @@ pub mod state_circuit;
 #[cfg(test)]
 pub mod test_util;
 pub mod util;
+
+pub use gadgets::impl_expr;

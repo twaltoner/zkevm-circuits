@@ -1669,6 +1669,8 @@ dependencies = [
  "rand",
  "rand_xorshift",
  "sha3 0.7.3",
+ "strum",
+ "strum_macros",
 ]
 
 [[package]]
