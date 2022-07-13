@@ -107,6 +107,7 @@ use is_zero::IsZeroGadget;
 use jump::JumpGadget;
 use jumpdest::JumpdestGadget;
 use jumpi::JumpiGadget;
+use logs::LogGadget;
 use memory::MemoryGadget;
 use memory_copy::CopyToMemoryGadget;
 use msize::MsizeGadget;
@@ -190,7 +191,7 @@ pub(crate) struct ExecutionConfig<F> {
     jump_gadget: JumpGadget<F>,
     jumpdest_gadget: JumpdestGadget<F>,
     jumpi_gadget: JumpiGadget<F>,
-    log_gadget: DummyGadget<F, 0, 0, { ExecutionState::LOG }>,
+    log_gadget: LogGadget<F>,
     memory_gadget: MemoryGadget<F>,
     msize_gadget: MsizeGadget<F>,
     mul_div_mod_gadget: MulDivModGadget<F>,
@@ -243,6 +244,11 @@ pub(crate) struct ExecutionConfig<F> {
     error_oog_sstore: DummyGadget<F, 0, 0, { ExecutionState::ErrorOutOfGasSSTORE }>,
     error_oog_call: DummyGadget<F, 0, 0, { ExecutionState::ErrorOutOfGasCALL }>,
     error_oog_memory_copy: DummyGadget<F, 0, 0, { ExecutionState::ErrorOutOfGasMemoryCopy }>,
+    error_oog_account_access: DummyGadget<F, 0, 0, { ExecutionState::ErrorOutOfGasAccountAccess }>,
+    error_oog_sha3: DummyGadget<F, 0, 0, { ExecutionState::ErrorOutOfGasSHA3 }>,
+    error_oog_ext_codecopy: DummyGadget<F, 0, 0, { ExecutionState::ErrorOutOfGasEXTCODECOPY }>,
+    error_oog_call_code: DummyGadget<F, 0, 0, { ExecutionState::ErrorOutOfGasCALLCODE }>,
+    error_oog_delegate_call: DummyGadget<F, 0, 0, { ExecutionState::ErrorOutOfGasDELEGATECALL }>,
 
     invalid_opcode_gadget: DummyGadget<F, 0, 0, { ExecutionState::ErrorInvalidOpcode }>,
 }
@@ -478,6 +484,11 @@ impl<F: Field> ExecutionConfig<F> {
             error_oog_sstore: configure_gadget!(),
             error_oog_call: configure_gadget!(),
             error_oog_memory_copy: configure_gadget!(),
+            error_oog_account_access: configure_gadget!(),
+            error_oog_sha3: configure_gadget!(),
+            error_oog_ext_codecopy: configure_gadget!(),
+            error_oog_call_code: configure_gadget!(),
+            error_oog_delegate_call: configure_gadget!(),
             invalid_opcode_gadget: configure_gadget!(),
             // step and presets
             step: step_curr,
@@ -1011,6 +1022,21 @@ impl<F: Field> ExecutionConfig<F> {
             }
             ExecutionState::ErrorOutOfGasMemoryCopy => {
                 assign_exec_step!(self.error_oog_memory_copy)
+            }
+            ExecutionState::ErrorOutOfGasAccountAccess => {
+                assign_exec_step!(self.error_oog_account_access)
+            }
+            ExecutionState::ErrorOutOfGasSHA3 => {
+                assign_exec_step!(self.error_oog_sha3)
+            }
+            ExecutionState::ErrorOutOfGasEXTCODECOPY => {
+                assign_exec_step!(self.error_oog_ext_codecopy)
+            }
+            ExecutionState::ErrorOutOfGasCALLCODE => {
+                assign_exec_step!(self.error_oog_call_code)
+            }
+            ExecutionState::ErrorOutOfGasDELEGATECALL => {
+                assign_exec_step!(self.error_oog_delegate_call)
             }
 
             ExecutionState::ErrorStackOverflow => {
