@@ -5,7 +5,7 @@ use crate::circuit_input_builder::{
 use crate::constants::MAX_COPY_BYTES;
 use crate::Error;
 use eth_types::evm_types::Memory;
-use eth_types::{GethExecStep, ToAddress, ToWord};
+use eth_types::{Address, GethExecStep, ToAddress, ToWord};
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Extcodecopy;
@@ -55,6 +55,19 @@ impl Opcode for Extcodecopy {
             }
         }
         Ok(memory)
+    }
+
+    fn reconstruct_accessed_addresses(
+        &self,
+        state: &mut CircuitInputStateRef,
+        geth_steps: &[GethExecStep],
+    ) -> Result<Option<Vec<Address>>, Error> {
+        let address = geth_steps[0].stack.nth_last(0)?.to_address();
+        if state.sdb.add_account_to_access_list(address) {
+            Ok(Some(vec![address]))
+        } else {
+            Ok(None)
+        }
     }
 }
 

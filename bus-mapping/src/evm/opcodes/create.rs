@@ -3,13 +3,13 @@ use crate::evm::Opcode;
 use crate::operation::{AccountField, AccountOp, TxAccessListAccountOp, RW};
 use crate::Error;
 use eth_types::evm_types::Memory;
-use eth_types::GethExecStep;
+use eth_types::{Address, GethExecStep};
 use keccak256::EMPTY_HASH;
 
 #[derive(Debug, Copy, Clone)]
-pub struct DummyCreate;
+pub struct DummyCreate<const IS_CREATE2: bool>;
 
-impl Opcode for DummyCreate {
+impl<const IS_CREATE2: bool> Opcode for DummyCreate<IS_CREATE2> {
     fn gen_associated_ops(
         &self,
         state: &mut CircuitInputStateRef,
@@ -31,6 +31,29 @@ impl Opcode for DummyCreate {
         memory.extend_at_least(offset + length);
 
         Ok(memory)
+    }
+
+    /// Quote from [EIP-2929](https://eips.ethereum.org/EIPS/eip-2929)
+    /// > When a CREATE or CREATE2 opcode is called,
+    /// > immediately (ie. before checks are done to determine
+    /// > whether or not the address is unclaimed)
+    /// > add the address being created to accessed_addresses,
+    /// > but gas costs of CREATE and CREATE2 are unchanged
+    fn reconstruct_accessed_addresses(
+        &self,
+        state: &mut CircuitInputStateRef,
+        geth_steps: &[GethExecStep],
+    ) -> Result<Option<Vec<Address>>, Error> {
+        let address = if IS_CREATE2 {
+            state.create2_address(&geth_steps[0])?
+        } else {
+            state.create_address()?
+        };
+        if state.sdb.add_account_to_access_list(address) {
+            Ok(Some(vec![address]))
+        } else {
+            Ok(None)
+        }
     }
 }
 

@@ -10,13 +10,14 @@ use crate::{
 use core::fmt::Debug;
 use eth_types::{
     evm_types::{GasCost, MAX_REFUND_QUOTIENT_OF_GAS_USED},
-    GethExecStep, ToAddress, ToWord, Word,
+    Address, GethExecStep, ToAddress, ToWord, Word,
 };
 use keccak256::EMPTY_HASH;
 use log::warn;
 use std::collections::HashMap;
 use std::ops::Deref;
 
+mod balance;
 mod call;
 mod calldatacopy;
 mod calldataload;
@@ -30,6 +31,7 @@ mod create;
 mod dup;
 mod extcodecopy;
 mod extcodehash;
+mod extcodesize;
 mod gasprice;
 mod logs;
 mod mload;
@@ -49,6 +51,7 @@ mod swap;
 #[cfg(test)]
 mod memory_expansion_test;
 
+use balance::Balance;
 use call::Call;
 use calldatacopy::Calldatacopy;
 use calldataload::Calldataload;
@@ -62,6 +65,7 @@ use dup::Dup;
 use eth_types::evm_types::Memory;
 use extcodecopy::Extcodecopy;
 use extcodehash::Extcodehash;
+use extcodesize::Extcodesize;
 use gasprice::GasPrice;
 use logs::Log;
 use mload::Mload;
@@ -98,6 +102,28 @@ pub trait Opcode: Debug {
         geth_steps: &[GethExecStep],
     ) -> Result<Memory, Error> {
         Ok(geth_steps[0].memory.borrow().clone())
+    }
+
+    /// Reconstruct the accessed_addresses according to EIP-2929
+    ///
+    /// returns the added addresses if exists
+    fn reconstruct_accessed_addresses(
+        &self,
+        _state: &mut CircuitInputStateRef,
+        _geth_steps: &[GethExecStep],
+    ) -> Result<Option<Vec<Address>>, Error> {
+        Ok(None)
+    }
+
+    /// Reconstruct the accessed_storage_keys according to EIP-2929
+    ///
+    /// returns the added storage keys if exists
+    fn reconstruct_accessed_storage_keys(
+        &self,
+        _state: &mut CircuitInputStateRef,
+        _geth_steps: &[GethExecStep],
+    ) -> Result<Option<Vec<(Address, Word)>>, Error> {
+        Ok(None)
     }
 }
 
@@ -148,7 +174,7 @@ fn down_cast_to_opcode(opcode_id: &OpcodeId) -> &dyn Opcode {
         OpcodeId::SAR => &StackOnlyOpcode::<2, 1>,
         OpcodeId::SHA3 => &Sha3,
         OpcodeId::ADDRESS => &StackOnlyOpcode::<0, 1>,
-        OpcodeId::BALANCE => &StackOnlyOpcode::<1, 1>,
+        OpcodeId::BALANCE => &Balance,
         OpcodeId::ORIGIN => &Origin,
         OpcodeId::CALLER => &Caller,
         OpcodeId::CALLVALUE => &Callvalue,
@@ -158,7 +184,7 @@ fn down_cast_to_opcode(opcode_id: &OpcodeId) -> &dyn Opcode {
         OpcodeId::GASPRICE => &GasPrice,
         OpcodeId::CODECOPY => &Codecopy,
         OpcodeId::CODESIZE => &Codesize,
-        OpcodeId::EXTCODESIZE => &StackOnlyOpcode::<1, 1>,
+        OpcodeId::EXTCODESIZE => &Extcodesize,
         OpcodeId::EXTCODECOPY => &Extcodecopy,
         OpcodeId::RETURNDATASIZE => &StackOnlyOpcode::<0, 1>,
         OpcodeId::RETURNDATACOPY => &Returndatacopy,
@@ -238,9 +264,13 @@ fn down_cast_to_opcode(opcode_id: &OpcodeId) -> &dyn Opcode {
             warn!("Using dummy gen_call_ops for opcode {:?}", opcode_id);
             &DummyCall
         }
-        OpcodeId::CREATE | OpcodeId::CREATE2 => {
+        OpcodeId::CREATE => {
             warn!("Using dummy gen_create_ops for opcode {:?}", opcode_id);
-            &DummyCreate
+            &DummyCreate::<false>
+        }
+        OpcodeId::CREATE2 => {
+            warn!("Using dummy gen_create_ops for opcode {:?}", opcode_id);
+            &DummyCreate::<true>
         }
         _ => {
             warn!("Using dummy gen_associated_ops for opcode {:?}", opcode_id);
@@ -258,6 +288,9 @@ pub fn gen_associated_ops(
     geth_steps: &[GethExecStep],
 ) -> Result<Vec<ExecStep>, Error> {
     let opcode = down_cast_to_opcode(opcode_id);
+
+    let _added_addresses = opcode.reconstruct_accessed_addresses(state, geth_steps)?;
+    let _added_storage_keys = opcode.reconstruct_accessed_storage_keys(state, geth_steps)?;
 
     let memory = opcode.reconstruct_memory(state, geth_steps)?;
 
