@@ -10,7 +10,7 @@ use crate::{
 use core::fmt::Debug;
 use eth_types::{
     evm_types::{GasCost, MAX_REFUND_QUOTIENT_OF_GAS_USED},
-    Address, GethExecStep, ToAddress, ToWord, Word,
+    GethExecStep, ToAddress, ToWord, Word,
 };
 use keccak256::EMPTY_HASH;
 use log::warn;
@@ -102,28 +102,6 @@ pub trait Opcode: Debug {
         geth_steps: &[GethExecStep],
     ) -> Result<Memory, Error> {
         Ok(geth_steps[0].memory.borrow().clone())
-    }
-
-    /// Reconstruct the accessed_addresses according to EIP-2929
-    ///
-    /// returns the added addresses if exists
-    fn reconstruct_accessed_addresses(
-        &self,
-        _state: &mut CircuitInputStateRef,
-        _geth_steps: &[GethExecStep],
-    ) -> Result<Option<Vec<Address>>, Error> {
-        Ok(None)
-    }
-
-    /// Reconstruct the accessed_storage_keys according to EIP-2929
-    ///
-    /// returns the added storage keys if exists
-    fn reconstruct_accessed_storage_keys(
-        &self,
-        _state: &mut CircuitInputStateRef,
-        _geth_steps: &[GethExecStep],
-    ) -> Result<Option<Vec<(Address, Word)>>, Error> {
-        Ok(None)
     }
 }
 
@@ -288,9 +266,6 @@ pub fn gen_associated_ops(
     geth_steps: &[GethExecStep],
 ) -> Result<Vec<ExecStep>, Error> {
     let opcode = down_cast_to_opcode(opcode_id);
-
-    let _added_addresses = opcode.reconstruct_accessed_addresses(state, geth_steps)?;
-    let _added_storage_keys = opcode.reconstruct_accessed_storage_keys(state, geth_steps)?;
 
     let memory = opcode.reconstruct_memory(state, geth_steps)?;
 
