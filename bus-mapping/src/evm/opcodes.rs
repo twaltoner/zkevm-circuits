@@ -1,4 +1,5 @@
 //! Definition of each opcode of the EVM.
+use crate::error::{get_step_reported_error, ExecError};
 use crate::{
     circuit_input_builder::{CircuitInputStateRef, ExecStep},
     evm::OpcodeId,
@@ -494,6 +495,15 @@ fn dummy_gen_call_ops(
 ) -> Result<Vec<ExecStep>, Error> {
     let geth_step = &geth_steps[0];
     let mut exec_step = state.new_step(geth_step)?;
+    // handle error condition
+    if let Some(error) = geth_step.clone().error {
+        let mut exec_step = state.new_step(geth_step)?;
+        let execution_error: ExecError = get_step_reported_error(&geth_step.op, &error);
+        log::warn!("geth error {} occurred in dummy CALLCODE | OpcodeId::DELEGATECALL | OpcodeId::STATICCALL", error);
+        exec_step.error = Some(execution_error);
+        state.handle_return(geth_step)?;
+        return Ok(vec![exec_step]);
+    }
 
     let tx_id = state.tx_ctx.id();
     let call = state.parse_call(geth_step)?;
@@ -537,6 +547,18 @@ fn dummy_gen_create_ops(
 ) -> Result<Vec<ExecStep>, Error> {
     let geth_step = &geth_steps[0];
     let mut exec_step = state.new_step(geth_step)?;
+    // handle error condition
+    if let Some(error) = geth_step.clone().error {
+        let mut exec_step = state.new_step(geth_step)?;
+        let execution_error: ExecError = get_step_reported_error(&geth_step.op, &error);
+        log::warn!(
+            "geth error {} occurred in dummy OpcodeId::CREATE | OpcodeId::CREATE2",
+            error
+        );
+        exec_step.error = Some(execution_error);
+        state.handle_return(geth_step)?;
+        return Ok(vec![exec_step]);
+    }
 
     let tx_id = state.tx_ctx.id();
     let call = state.parse_call(geth_step)?;
@@ -606,6 +628,16 @@ fn dummy_gen_selfdestruct_ops(
 ) -> Result<Vec<ExecStep>, Error> {
     let geth_step = &geth_steps[0];
     let mut exec_step = state.new_step(geth_step)?;
+    // handle error condition
+    if let Some(error) = geth_step.clone().error {
+        let mut exec_step = state.new_step(geth_step)?;
+        let execution_error: ExecError = get_step_reported_error(&geth_step.op, &error);
+        log::warn!("geth error {} occurred in dummy selfdestruct", error);
+        exec_step.error = Some(execution_error);
+        state.handle_return(geth_step)?;
+        return Ok(vec![exec_step]);
+    }
+
     let sender = state.call()?.address;
     let receiver = geth_step.stack.last()?.to_address();
 
