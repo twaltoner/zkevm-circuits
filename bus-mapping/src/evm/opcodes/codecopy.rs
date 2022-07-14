@@ -8,7 +8,6 @@ use crate::{
 use eth_types::{GethExecStep, ToWord};
 
 use super::Opcode;
-use crate::error::{get_step_reported_error, ExecError};
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Codecopy;
@@ -19,16 +18,6 @@ impl Opcode for Codecopy {
         geth_steps: &[GethExecStep],
     ) -> Result<Vec<ExecStep>, Error> {
         let geth_step = &geth_steps[0];
-        // handle error condition
-        if let Some(error) = geth_step.clone().error {
-            let mut exec_step = state.new_step(geth_step)?;
-            let execution_error: ExecError = get_step_reported_error(&geth_step.op, &error);
-            log::warn!("geth error {} occurred in Codecopy", error);
-            exec_step.error = Some(execution_error);
-            state.handle_return(geth_step)?;
-            return Ok(vec![exec_step]);
-        }
-
         let mut exec_steps = vec![gen_codecopy_step(state, geth_step)?];
         let memory_copy_steps = gen_memory_copy_steps(state, geth_steps)?;
         exec_steps.extend(memory_copy_steps);

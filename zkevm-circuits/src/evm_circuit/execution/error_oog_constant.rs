@@ -225,7 +225,7 @@ mod test {
         );
     }
 
-    fn test_pop_underflow(value: Word) {
+    fn test_stack_underflow(value: Word) {
         let bytecode = bytecode! {
             PUSH32(value)
             POP
@@ -244,6 +244,6 @@ mod test {
 
     #[test]
     fn pop_gadget_underflow() {
-        test_pop_underflow(Word::from(0x030201));
+        test_stack_underflow(Word::from(0x030201));
     }
 }

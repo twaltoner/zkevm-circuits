@@ -6,7 +6,6 @@ use crate::{
 use eth_types::GethExecStep;
 
 use super::Opcode;
-use crate::error::{get_step_reported_error, ExecError};
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Codesize;
@@ -18,15 +17,6 @@ impl Opcode for Codesize {
     ) -> Result<Vec<ExecStep>, Error> {
         let geth_step = &geth_steps[0];
         let mut exec_step = state.new_step(geth_step)?;
-        // handle error condition
-        if let Some(error) = geth_step.clone().error {
-            let mut exec_step = state.new_step(geth_step)?;
-            let execution_error: ExecError = get_step_reported_error(&geth_step.op, &error);
-            log::warn!("geth error {} occurred in Codesize", error);
-            exec_step.error = Some(execution_error);
-            state.handle_return(geth_step)?;
-            return Ok(vec![exec_step]);
-        }
 
         let code_hash = state.call()?.code_hash;
         let code = state.code(code_hash)?;

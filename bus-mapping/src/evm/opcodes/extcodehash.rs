@@ -1,5 +1,4 @@
 use super::Opcode;
-use crate::error::{get_step_reported_error, ExecError};
 use crate::{
     circuit_input_builder::CircuitInputStateRef,
     evm::opcodes::ExecStep,
@@ -19,14 +18,6 @@ impl Opcode for Extcodehash {
     ) -> Result<Vec<ExecStep>, Error> {
         let step = &steps[0];
         let mut exec_step = state.new_step(step)?;
-        // handle error condition
-        if let Some(error) = step.clone().error {
-            let execution_error: ExecError = get_step_reported_error(&step.op, &error);
-            log::warn!("geth error {} occurred in Extcodehash", error);
-            exec_step.error = Some(execution_error);
-            state.handle_return(step)?;
-            return Ok(vec![exec_step]);
-        }
 
         let stack_address = step.stack.last_filled();
 

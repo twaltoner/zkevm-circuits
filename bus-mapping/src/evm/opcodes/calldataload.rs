@@ -6,7 +6,6 @@ use crate::{
 use eth_types::{GethExecStep, U256};
 
 use super::Opcode;
-use crate::error::{get_step_reported_error, ExecError};
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Calldataload;
@@ -18,15 +17,6 @@ impl Opcode for Calldataload {
     ) -> Result<Vec<ExecStep>, Error> {
         let geth_step = &geth_steps[0];
         let mut exec_step = state.new_step(geth_step)?;
-        // handle error condition
-        if let Some(error) = geth_step.clone().error {
-            let mut exec_step = state.new_step(geth_step)?;
-            let execution_error: ExecError = get_step_reported_error(&geth_step.op, &error);
-            log::warn!("geth error {} occurred in Calldataload", error);
-            exec_step.error = Some(execution_error);
-            state.handle_return(geth_step)?;
-            return Ok(vec![exec_step]);
-        }
 
         // fetch the top of the stack, i.e. offset in calldata to start reading 32-bytes
         // from.

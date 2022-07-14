@@ -1,6 +1,5 @@
 use super::Opcode;
 use crate::circuit_input_builder::{CircuitInputStateRef, ExecStep};
-use crate::error::{get_step_reported_error, ExecError};
 use crate::operation::CallContextField;
 use crate::Error;
 use eth_types::GethExecStep;
@@ -15,15 +14,6 @@ impl Opcode for Origin {
     ) -> Result<Vec<ExecStep>, Error> {
         let geth_step = &geth_steps[0];
         let mut exec_step = state.new_step(geth_step)?;
-        // handle error condition
-        if let Some(error) = geth_step.clone().error {
-            let mut exec_step = state.new_step(geth_step)?;
-            let execution_error: ExecError = get_step_reported_error(&geth_step.op, &error);
-            log::warn!("geth error {} occurred in Origin", error);
-            exec_step.error = Some(execution_error);
-            state.handle_return(geth_step)?;
-            return Ok(vec![exec_step]);
-        }
 
         // Get origin result from next step
         let value = geth_steps[1].stack.last()?;

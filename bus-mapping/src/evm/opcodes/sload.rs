@@ -1,6 +1,5 @@
 use super::Opcode;
 use crate::circuit_input_builder::{CircuitInputStateRef, ExecStep};
-use crate::error::{get_step_reported_error, ExecError};
 use crate::operation::CallContextField;
 use crate::{
     operation::{StorageOp, TxAccessListAccountStorageOp, RW},
@@ -21,14 +20,6 @@ impl Opcode for Sload {
     ) -> Result<Vec<ExecStep>, Error> {
         let geth_step = &geth_steps[0];
         let mut exec_step = state.new_step(geth_step)?;
-        // handle error condition
-        if let Some(error) = geth_step.clone().error {
-            let execution_error: ExecError = get_step_reported_error(&geth_step.op, &error);
-            log::warn!("geth error {} occurred in sload", error);
-            exec_step.error = Some(execution_error);
-            state.handle_return(geth_step)?;
-            return Ok(vec![exec_step]);
-        }
 
         let call_id = state.call()?.call_id;
         let contract_addr = state.call()?.address;
