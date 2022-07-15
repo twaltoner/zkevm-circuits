@@ -128,7 +128,7 @@ impl Opcode for Call {
 
         if geth_steps[0].depth + 1 == geth_steps[1].depth {
             let callee_gas_left_expected = geth_steps[1].gas.0 - if has_value { 2300 } else { 0 };
-            if callee_gas_left != callee_gas_left_expected {
+            if false && callee_gas_left != callee_gas_left_expected {
                 let (gas_cost_new, callee_gas_left_new) = g(!is_warm, is_account_empty, has_value);
                 if callee_gas_left_new == callee_gas_left_expected {
                     log::error!(
