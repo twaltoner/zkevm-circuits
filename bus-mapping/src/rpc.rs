@@ -145,7 +145,10 @@ impl<P: JsonRpcClient> GethClient<P> {
     /// ..
     pub async fn trace_tx_by_hash(&self, hash: H256) -> Result<Vec<GethExecTrace>, Error> {
         let hash = serialize(&hash);
-        let cfg = serialize(&GethLoggerConfig::default());
+        let mut cfg = GethLoggerConfig::default();
+        cfg.enable_memory = true;
+        //let cfg = serialize(&GethLoggerConfig::default());
+        let cfg = serialize(&cfg);
         let resp: GethExecTrace = self
             .0
             .request("debug_traceTransaction", [hash, cfg])
