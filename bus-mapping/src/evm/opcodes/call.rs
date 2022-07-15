@@ -26,6 +26,7 @@ impl Opcode for Call {
     ) -> Result<Vec<ExecStep>, Error> {
         let geth_step = &geth_steps[0];
         let mut exec_step = state.new_step(geth_step)?;
+
         let tx_id = state.tx_ctx.id();
         let current_call = state.call()?.clone();
         let call = state.parse_call(geth_step)?;

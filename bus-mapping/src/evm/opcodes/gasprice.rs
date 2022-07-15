@@ -16,7 +16,6 @@ impl Opcode for GasPrice {
     ) -> Result<Vec<ExecStep>, Error> {
         let geth_step = &geth_steps[0];
         let mut exec_step = state.new_step(geth_step)?;
-
         // Get gasprice result from next step
         let value = geth_steps[1].stack.last()?;
         let tx_id = state.tx_ctx.id();

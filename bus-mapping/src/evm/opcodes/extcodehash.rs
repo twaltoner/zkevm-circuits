@@ -18,7 +18,6 @@ impl Opcode for Extcodehash {
     ) -> Result<Vec<ExecStep>, Error> {
         let step = &steps[0];
         let mut exec_step = state.new_step(step)?;
-
         let stack_address = step.stack.last_filled();
 
         // Pop external address off stack

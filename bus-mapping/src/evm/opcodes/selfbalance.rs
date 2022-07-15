@@ -14,7 +14,6 @@ impl Opcode for Selfbalance {
     ) -> Result<Vec<ExecStep>, Error> {
         let geth_step = &geth_steps[0];
         let mut exec_step = state.new_step(geth_step)?;
-
         let self_balance = geth_steps[1].stack.last()?;
         let callee_address = state.call()?.address;
 

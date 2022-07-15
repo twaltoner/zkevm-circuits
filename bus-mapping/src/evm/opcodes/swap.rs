@@ -15,6 +15,7 @@ impl<const N: usize> Opcode for Swap<N> {
     ) -> Result<Vec<ExecStep>, Error> {
         let geth_step = &geth_steps[0];
         let mut exec_step = state.new_step(geth_step)?;
+
         // Peek b and a
         let stack_b_value_read = geth_step.stack.nth_last(N)?;
         let stack_b_position = geth_step.stack.nth_last_filled(N);

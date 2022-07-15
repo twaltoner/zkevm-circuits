@@ -16,7 +16,6 @@ impl Opcode for Callvalue {
     ) -> Result<Vec<ExecStep>, Error> {
         let geth_step = &geth_steps[0];
         let mut exec_step = state.new_step(geth_step)?;
-
         // Get call_value result from next step
         let value = geth_steps[1].stack.last()?;
         // CallContext read of the call_value

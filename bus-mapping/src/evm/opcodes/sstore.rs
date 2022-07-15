@@ -21,6 +21,7 @@ impl Opcode for Sstore {
     ) -> Result<Vec<ExecStep>, Error> {
         let geth_step = &geth_steps[0];
         let mut exec_step = state.new_step(geth_step)?;
+
         let contract_addr = state.call()?.address;
 
         state.call_context_read(
