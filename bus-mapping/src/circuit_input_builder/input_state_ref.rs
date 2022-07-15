@@ -17,7 +17,7 @@ use crate::{
 };
 use eth_types::{
     evm_types::{Gas, MemoryAddress, OpcodeId, StackAddress},
-    Address, GethExecStep, ToAddress, ToBigEndian, Word, H256,
+    Address, GethExecStep, Hash, ToAddress, ToBigEndian, Word, H256,
 };
 use ethers_core::utils::{get_contract_address, get_create2_address};
 
@@ -441,10 +441,18 @@ impl<'a> CircuitInputStateRef<'a> {
         self.transfer_with_fee(step, sender, receiver, value, Word::zero())
     }
 
+    pub fn code_hash(&self, address: Address) -> Result<Hash, Error> {
+        self.code_db
+            .address_hash
+            .get(&address)
+            .copied()
+            .ok_or(Error::AccountNotFound(address))
+    }
+
     /// Fetch and return code for the given code hash from the code DB.
     pub fn code(&self, code_hash: H256) -> Result<Vec<u8>, Error> {
         self.code_db
-            .0
+            .hash_code
             .get(&code_hash)
             .cloned()
             .ok_or(Error::CodeNotFound(code_hash))
@@ -486,12 +494,22 @@ impl<'a> CircuitInputStateRef<'a> {
         self.tx_ctx.call_ctx_mut()
     }
 
+    pub fn caller_ctx_mut(&mut self) -> Result<&mut CallContext, Error> {
+        self.tx_ctx
+            .calls
+            .iter_mut()
+            .rev()
+            .nth(1)
+            .ok_or(Error::InternalError("caller id not found in call map"))
+    }
+
     /// Push a new [`Call`] into the [`Transaction`], and add its index and
     /// [`CallContext`] in the `call_stack` of the [`TransactionContext`]
     pub fn push_call(&mut self, call: Call, step: &GethExecStep) {
         let call_data = match call.kind {
             CallKind::Call | CallKind::CallCode | CallKind::DelegateCall | CallKind::StaticCall => {
                 step.memory
+                    .borrow()
                     .read_chunk(call.call_data_offset.into(), call.call_data_length.into())
             }
             CallKind::Create | CallKind::Create2 => Vec::new(),
@@ -571,7 +589,7 @@ impl<'a> CircuitInputStateRef<'a> {
         let (code_source, code_hash) = match kind {
             CallKind::Create | CallKind::Create2 => {
                 let init_code = get_create_init_code(step)?;
-                let code_hash = self.code_db.insert(init_code.to_vec());
+                let code_hash = self.code_db.insert(None, init_code.to_vec());
                 (CodeSource::Memory, code_hash)
             }
             _ => {
@@ -770,8 +788,9 @@ impl<'a> CircuitInputStateRef<'a> {
             let length = step.stack.nth_last(1)?;
             let code = step
                 .memory
+                .borrow()
                 .read_chunk(offset.low_u64().into(), length.low_u64().into());
-            let code_hash = self.code_db.insert(code);
+            let code_hash = self.code_db.insert(None, code);
             let (found, callee_account) = self.sdb.get_account_mut(&call.address);
             if !found {
                 return Err(Error::AccountNotFound(call.address));
@@ -856,8 +875,8 @@ impl<'a> CircuitInputStateRef<'a> {
                     if length > Word::from(0x6000u64) {
                         return Ok(Some(ExecError::MaxCodeSizeExceeded));
                     } else if length > Word::zero()
-                        && !step.memory.0.is_empty()
-                        && step.memory.0.get(offset.low_u64() as usize) == Some(&0xef)
+                        && !step.memory.borrow().is_empty()
+                        && step.memory.borrow().0.get(offset.low_u64() as usize) == Some(&0xef)
                     {
                         return Ok(Some(ExecError::InvalidCreationCode));
                     } else if Word::from(200u64) * length > Word::from(step.gas.0) {

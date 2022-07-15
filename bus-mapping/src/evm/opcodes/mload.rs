@@ -3,7 +3,7 @@ use crate::circuit_input_builder::{CircuitInputStateRef, ExecStep};
 use crate::error::{get_step_reported_error, ExecError};
 use crate::Error;
 use core::convert::TryInto;
-use eth_types::evm_types::MemoryAddress;
+use eth_types::evm_types::{Memory, MemoryAddress};
 use eth_types::{GethExecStep, ToBigEndian};
 
 /// Placeholder structure used to implement [`Opcode`] trait over it
@@ -16,6 +16,7 @@ pub(crate) struct Mload;
 
 impl Opcode for Mload {
     fn gen_associated_ops(
+        &self,
         state: &mut CircuitInputStateRef,
         geth_steps: &[GethExecStep],
     ) -> Result<Vec<ExecStep>, Error> {
@@ -42,7 +43,7 @@ impl Opcode for Mload {
         let mut mem_read_addr: MemoryAddress = stack_value_read.try_into()?;
         // Accesses to memory that hasn't been initialized are valid, and return
         // 0.
-        let mem_read_value = geth_steps[1].memory.read_word(mem_read_addr);
+        let mem_read_value = geth_steps[1].memory.borrow().read_word(mem_read_addr);
 
         //
         // First stack write
@@ -60,6 +61,21 @@ impl Opcode for Mload {
         }
 
         Ok(vec![exec_step])
+    }
+
+    fn reconstruct_memory(
+        &self,
+        _state: &mut CircuitInputStateRef,
+        geth_steps: &[GethExecStep],
+    ) -> Result<Memory, Error> {
+        let geth_step = &geth_steps[0];
+        let offset = geth_step.stack.nth_last(0)?;
+        let offset_addr: MemoryAddress = offset.try_into()?;
+
+        let mut memory = geth_step.memory.borrow().clone();
+        let minimal_length = offset_addr.0 + 32;
+        memory.extend_at_least(minimal_length);
+        Ok(memory)
     }
 }
 

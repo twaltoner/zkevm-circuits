@@ -38,8 +38,9 @@ use halo2_proofs::{
         group::ff::PrimeField,
     },
 };
+use std::cell::RefCell;
 
-use serde::{de, Deserialize};
+use serde::{de, Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
 use std::str::FromStr;
@@ -247,7 +248,7 @@ struct GethExecStepInternal {
 
 /// The execution step type returned by geth RPC debug_trace* methods.
 /// Corresponds to `StructLogRes` in `go-ethereum/internal/ethapi/api.go`.
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, Serialize)]
 #[doc(hidden)]
 pub struct GethExecStep {
     pub pc: ProgramCounter,
@@ -260,7 +261,7 @@ pub struct GethExecStep {
     // stack is in hex 0x prefixed
     pub stack: Stack,
     // memory is in chunks of 32 bytes, in hex
-    pub memory: Memory,
+    pub memory: RefCell<Memory>,
     // storage is hex -> hex
     pub storage: Storage,
 }
@@ -315,12 +316,12 @@ impl<'de> Deserialize<'de> for GethExecStep {
             depth: s.depth,
             error: s.error,
             stack: Stack(s.stack.iter().map(|dw| dw.to_word()).collect::<Vec<Word>>()),
-            memory: Memory::from(
+            memory: RefCell::new(Memory::from(
                 s.memory
                     .iter()
                     .map(|dw| dw.to_word())
                     .collect::<Vec<Word>>(),
-            ),
+            )),
             storage: Storage(
                 s.storage
                     .iter()
@@ -364,7 +365,7 @@ pub struct GethExecTraceInternal {
 /// The deserialization truncates the memory of each step in `struct_logs` to
 /// the memory size before the expansion, so that it corresponds to the memory
 /// before the step is executed.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Serialize, Clone, Debug, Eq, PartialEq)]
 pub struct GethExecTrace {
     /// Used gas
     pub gas: Gas,
@@ -388,10 +389,10 @@ pub fn fix_geth_trace_memory_size(trace: &mut [GethExecStep]) {
         let step = &trace[i];
         mem_sizes[i] = match step.depth as isize - step_prev.depth as isize {
             // Same call context
-            0 => step_prev.memory.0.len(),
+            0 => step_prev.memory.borrow().len(),
             // into new call context
             1 => {
-                call_mem_size_stack.push(step_prev.memory.0.len());
+                call_mem_size_stack.push(step_prev.memory.borrow().len());
                 0
             }
             // return from call context
@@ -400,7 +401,8 @@ pub fn fix_geth_trace_memory_size(trace: &mut [GethExecStep]) {
         };
     }
     for i in 0..trace.len() {
-        trace[i].memory.0.truncate(mem_sizes[i]);
+        let memory: &mut Memory = trace[i].memory.get_mut();
+        memory.0.truncate(mem_sizes[i]);
     }
 }
 
@@ -412,10 +414,10 @@ impl<'de> Deserialize<'de> for GethExecTrace {
         let GethExecTraceInternal {
             gas,
             failed,
-            mut struct_logs,
+            struct_logs,
             return_value,
         } = GethExecTraceInternal::deserialize(deserializer)?;
-        fix_geth_trace_memory_size(&mut struct_logs);
+        //fix_geth_trace_memory_size(&mut struct_logs);
         Ok(Self {
             gas,
             failed,
@@ -546,7 +548,7 @@ mod tests {
                         error: None,
                         stack: Stack::new(),
                         storage: Storage(word_map!()),
-                        memory: Memory::new(),
+                        memory: RefCell::new(Memory::new()),
                     },
                     GethExecStep {
                         pc: ProgramCounter(163),
@@ -558,7 +560,11 @@ mod tests {
                         error: None,
                         stack: Stack(vec![word!("0x1003e2d2"), word!("0x2a"), word!("0x0")]),
                         storage: Storage(word_map!("0x0" => "0x6f")),
-                        memory: Memory::from(vec![word!("0x0"), word!("0x0"), word!("0x080")]),
+                        memory: RefCell::new(Memory::from(vec![
+                            word!("0x0"),
+                            word!("0x0"),
+                            word!("0x080")
+                        ])),
                     },
                     GethExecStep {
                         pc: ProgramCounter(189),
@@ -574,7 +580,7 @@ mod tests {
                             word!("0x0")
                         ]),
                         storage: Storage(word_map!()),
-                        memory: Memory::from(vec![
+                        memory: RefCell::new(Memory::from(vec![
                             word!(
                                 "000000000000000000000000b8f67472dcc25589672a61905f7fd63f09e5d470"
                             ),
@@ -593,7 +599,7 @@ mod tests {
                             word!(
                                 "00000000000000000000000000000000000000000000003635c9adc5dea00000"
                             ),
-                        ]),
+                        ])),
                     }
                 ],
             }

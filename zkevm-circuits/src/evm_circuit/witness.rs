@@ -1272,7 +1272,7 @@ impl From<&circuit_input_builder::ExecStep> for ExecutionState {
 
                 macro_rules! dummy {
                     ($name:expr) => {{
-                        log::warn!("$name is implemented with DummyGadget");
+                        log::warn!("{:?} is implemented with DummyGadget", $name);
                         $name
                     }};
                 }
@@ -1493,7 +1493,8 @@ pub fn block_convert(
                     .unique()
                     .into_iter()
                     .map(|code_hash| {
-                        let bytecode = Bytecode::new(code_db.0.get(&code_hash).unwrap().to_vec());
+                        let bytecode =
+                            Bytecode::new(code_db.hash_code.get(&code_hash).unwrap().to_vec());
                         (bytecode.hash, bytecode)
                     })
             })

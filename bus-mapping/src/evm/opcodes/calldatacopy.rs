@@ -8,6 +8,7 @@ use crate::{
     },
     constants::MAX_COPY_BYTES,
 };
+use eth_types::evm_types::Memory;
 use eth_types::GethExecStep;
 
 #[derive(Clone, Copy, Debug)]
@@ -15,6 +16,7 @@ pub(crate) struct Calldatacopy;
 
 impl Opcode for Calldatacopy {
     fn gen_associated_ops(
+        &self,
         state: &mut CircuitInputStateRef,
         geth_steps: &[GethExecStep],
     ) -> Result<Vec<ExecStep>, Error> {
@@ -33,6 +35,37 @@ impl Opcode for Calldatacopy {
         let memory_copy_steps = gen_memory_copy_steps(state, geth_steps)?;
         exec_steps.extend(memory_copy_steps);
         Ok(exec_steps)
+    }
+
+    fn reconstruct_memory(
+        &self,
+        state: &mut CircuitInputStateRef,
+        geth_steps: &[GethExecStep],
+    ) -> Result<Memory, Error> {
+        let memory_offset = geth_steps[0].stack.nth_last(0)?.as_u64();
+        let data_offset = geth_steps[0].stack.nth_last(1)?.as_u64();
+        let length = geth_steps[0].stack.nth_last(2)?.as_usize();
+        let mut memory = geth_steps[0].memory.borrow().clone();
+        if length != 0 {
+            let minimal_length = memory_offset as usize + length;
+            memory.extend_at_least(minimal_length);
+
+            let mem_starts = memory_offset as usize;
+            let mem_ends = mem_starts + length as usize;
+            let data_starts = data_offset as usize;
+            let data_ends = data_starts + length as usize;
+            let call_data = &state.call_ctx()?.call_data;
+            if data_ends <= call_data.len() {
+                memory.0[mem_starts..mem_ends].copy_from_slice(&call_data[data_starts..data_ends]);
+            } else if let Some(actual_length) = call_data.len().checked_sub(data_starts) {
+                let mem_code_ends = mem_starts + actual_length;
+                memory.0[mem_starts..mem_code_ends].copy_from_slice(&call_data[data_starts..]);
+                // since we already resize the memory, no need to copy 0s for
+                // out of bound bytes
+            }
+        }
+        state.call_ctx_mut()?.memory = memory.clone();
+        Ok(memory)
     }
 }
 
@@ -246,6 +279,8 @@ mod calldatacopy_tests {
         .unwrap()
         .into();
 
+        println!("{}", serde_json::to_string(&block.geth_traces).unwrap());
+
         let mut builder = BlockData::new_from_geth_data(block.clone()).new_circuit_input_builder();
         builder
             .handle_block(&block.eth_block, &block.geth_traces)
@@ -356,6 +391,71 @@ mod calldatacopy_tests {
                 memory_ops
             },
         );
+    }
+
+    #[test]
+    fn calldatacopy_opcode_internal_overflow() {
+        let (addr_a, addr_b) = (mock::MOCK_ACCOUNTS[0], mock::MOCK_ACCOUNTS[1]);
+
+        // code B gets called by code A, so the call is an internal call.
+        let dst_offset = 0x00usize;
+        let offset = 0x00usize;
+        let copy_size = 0x50usize;
+        let code_b = bytecode! {
+            PUSH32(copy_size)  // size
+            PUSH32(offset)     // offset
+            PUSH32(dst_offset) // dst_offset
+            CALLDATACOPY
+            STOP
+        };
+
+        // code A calls code B.
+        let pushdata = hex::decode("1234567890abcdef").unwrap();
+        let _memory_a = std::iter::repeat(0)
+            .take(24)
+            .chain(pushdata.clone())
+            .collect::<Vec<u8>>();
+        let call_data_length = 0x20usize;
+        let call_data_offset = 0x10usize;
+        let code_a = bytecode! {
+            // populate memory in A's context.
+            PUSH8(Word::from_big_endian(&pushdata))
+            PUSH1(0x00) // offset
+            MSTORE
+            // call addr_b.
+            PUSH1(0x00) // retLength
+            PUSH1(0x00) // retOffset
+            PUSH1(call_data_length) // argsLength
+            PUSH1(call_data_offset) // argsOffset
+            PUSH1(0x00) // value
+            PUSH32(addr_b.to_word()) // addr
+            PUSH32(0x1_0000) // gas
+            CALL
+            STOP
+        };
+
+        // Get the execution steps from the external tracer
+        let block: GethData = TestContext::<3, 1>::new(
+            None,
+            |accs| {
+                accs[0].address(addr_b).code(code_b);
+                accs[1].address(addr_a).code(code_a);
+                accs[2]
+                    .address(mock::MOCK_ACCOUNTS[2])
+                    .balance(Word::from(1u64 << 30));
+            },
+            |mut txs, accs| {
+                txs[0].to(accs[1].address).from(accs[2].address);
+            },
+            |block, _tx| block,
+        )
+        .unwrap()
+        .into();
+
+        let mut builder = BlockData::new_from_geth_data(block.clone()).new_circuit_input_builder();
+        builder
+            .handle_block(&block.eth_block, &block.geth_traces)
+            .unwrap();
     }
 
     #[test]

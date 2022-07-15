@@ -5,6 +5,7 @@ use crate::{
     operation::{AccountField, CallContextField, TxAccessListAccountOp, RW},
     Error,
 };
+use eth_types::evm_types::Memory;
 use eth_types::{
     evm_types::{
         gas_utils::{eip150_gas, memory_expansion_gas_cost},
@@ -14,6 +15,7 @@ use eth_types::{
 };
 use keccak256::EMPTY_HASH;
 use log::warn;
+use std::cmp::max;
 
 /// Placeholder structure used to implement [`Opcode`] trait over it
 /// corresponding to the `OpcodeId::CALL` `OpcodeId`.
@@ -22,6 +24,7 @@ pub(crate) struct Call;
 
 impl Opcode for Call {
     fn gen_associated_ops(
+        &self,
         state: &mut CircuitInputStateRef,
         geth_steps: &[GethExecStep],
     ) -> Result<Vec<ExecStep>, Error> {
@@ -82,14 +85,14 @@ impl Opcode for Call {
         // Calculate next_memory_word_size and callee_gas_left manually in case
         // there isn't next geth_step (e.g. callee doesn't have code).
         let next_memory_word_size = [
-            geth_step.memory.word_size() as u64,
+            geth_step.memory.borrow().word_size() as u64,
             (call.call_data_offset + call.call_data_length + 31) / 32,
             (call.return_data_offset + call.return_data_length + 31) / 32,
         ]
         .into_iter()
         .max()
         .unwrap();
-        let curr_memory_word_size = geth_step.memory.word_size() as u64;
+        let curr_memory_word_size = geth_step.memory.borrow().word_size() as u64;
         let memory_expansion_gas_cost =
             memory_expansion_gas_cost(curr_memory_word_size, next_memory_word_size);
 
@@ -293,5 +296,34 @@ impl Opcode for Call {
                 Ok(vec![exec_step])
             }
         }
+    }
+
+    fn reconstruct_memory(
+        &self,
+        _state: &mut CircuitInputStateRef,
+        geth_steps: &[GethExecStep],
+    ) -> Result<Memory, Error> {
+        let geth_step = &geth_steps[0];
+        let args_offset = geth_step.stack.nth_last(3)?.as_usize();
+        let args_length = geth_step.stack.nth_last(4)?.as_usize();
+        let ret_offset = geth_step.stack.nth_last(5)?.as_usize();
+        let ret_length = geth_step.stack.nth_last(6)?.as_usize();
+
+        let mut memory = geth_steps[0].memory.borrow().clone();
+        let args_minimal = if args_length != 0 {
+            args_offset + args_length
+        } else {
+            0
+        };
+        let ret_minimal = if ret_length != 0 {
+            ret_offset + ret_length
+        } else {
+            0
+        };
+        if args_minimal != 0 || ret_minimal != 0 {
+            let minimal_length = max(args_minimal, ret_minimal);
+            memory.extend_at_least(minimal_length);
+        }
+        Ok(memory)
     }
 }
