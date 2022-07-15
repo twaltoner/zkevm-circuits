@@ -134,6 +134,10 @@ pub(crate) trait ExecutionGadget<F: FieldExt> {
 
     const EXECUTION_STATE: ExecutionState;
 
+    fn is_dummy(&self) -> bool {
+        false
+    }
+
     fn configure(cb: &mut ConstraintBuilder<F>) -> Self;
 
     fn assign_exec_step(
@@ -919,13 +923,15 @@ impl<F: Field> ExecutionConfig<F> {
         self.step
             .assign_exec_step(region, offset, block, transaction, call, step)?;
 
+        // FIXME better way to do this?
         macro_rules! assign_exec_step {
-            ($gadget:expr) => {
-                $gadget.assign_exec_step(region, offset, block, transaction, call, step)?
-            };
+            ($gadget:expr) => {{
+                $gadget.assign_exec_step(region, offset, block, transaction, call, step)?;
+                $gadget.is_dummy()
+            }};
         }
 
-        match step.execution_state {
+        let is_dummy = match step.execution_state {
             // internal states
             ExecutionState::BeginTx => assign_exec_step!(self.begin_tx_gadget),
             ExecutionState::CopyCodeToMemory => assign_exec_step!(self.copy_code_to_memory_gadget),
@@ -1053,11 +1059,23 @@ impl<F: Field> ExecutionConfig<F> {
                 assign_exec_step!(self.dummy_gadget)
             }
             _ => unimplemented!("unimplemented ExecutionState: {:?}", step.execution_state),
+        };
+
+        let assigned_stored_expressions = self.assign_stored_expressions(region, offset, step)?;
+
+        if !is_dummy {
+            Self::check_rw_lookup(&assigned_stored_expressions, step, block);
         }
+        Ok(())
+    }
 
-        // Fill in the witness values for stored expressions
-
-        let mut assigned_rw_values = Vec::new();
+    fn assign_stored_expressions(
+        &self,
+        region: &mut CachedRegion<'_, '_, F>,
+        offset: usize,
+        step: &ExecStep,
+    ) -> Result<Vec<(String, F)>, Error> {
+        let mut assigned_stored_expressions = Vec::new();
         for stored_expression in self
             .stored_expressions_map
             .get(&step.execution_state)
@@ -1066,15 +1084,28 @@ impl<F: Field> ExecutionConfig<F> {
             let assigned = stored_expression.assign(region, offset)?;
             if let Some(v) = assigned.value() {
                 let name = stored_expression.name.clone();
-                if name.starts_with("rw lookup ")
-                    && !name.contains(" with reversion")
-                    && !v.is_zero_vartime()
-                    && !assigned_rw_values.contains(&(name.clone(), *v))
-                {
-                    assigned_rw_values.push((name, *v));
-                }
+                assigned_stored_expressions.push((name, *v))
             }
         }
+        Ok(assigned_stored_expressions)
+    }
+    fn check_rw_lookup(
+        assigned_stored_expressions: &Vec<(String, F)>,
+        step: &ExecStep,
+        block: &Block<F>,
+    ) {
+        let mut assigned_rw_values = Vec::new();
+        for (name, v) in assigned_stored_expressions {
+            if name.starts_with("rw lookup ")
+                && !name.contains(" with reversion")
+                && !v.is_zero_vartime()
+                && !assigned_rw_values.contains(&(name.clone(), *v))
+            {
+                assigned_rw_values.push((name.clone(), *v));
+            }
+        }
+
+        // Fill in the witness values for stored expressions
 
         for idx in 0..assigned_rw_values.len() {
             let rw_idx = step.rw_indices[idx];
@@ -1092,7 +1123,5 @@ impl<F: Field> ExecutionConfig<F> {
                 rw_idx, idx, step
             )
         }
-
-        Ok(())
     }
 }
