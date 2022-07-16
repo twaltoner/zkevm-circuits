@@ -197,8 +197,9 @@ impl<'a> CircuitInputBuilder {
         for (index, geth_step) in geth_trace.struct_logs.iter().enumerate() {
             let mut state_ref = self.state_ref(&mut tx, &mut tx_ctx);
             log::trace!(
-                "handle {}th tx {}th opcode {:?} {}",
+                "handle {}th tx depth {} {}th opcode {:?} {}",
                 eth_tx.transaction_index.unwrap_or_default(),
+                geth_step.depth,
                 index,
                 geth_step.op,
                 if geth_step.op.is_push() {

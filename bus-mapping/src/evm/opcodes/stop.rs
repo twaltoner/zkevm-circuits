@@ -33,6 +33,7 @@ impl Opcode for Stop {
             1.into(),
         );
 
+        log::info!("stop gen_associated_ops call {:?}", call);
         if call.is_root {
             state.call_context_read(
                 &mut exec_step,
@@ -106,7 +107,7 @@ impl Opcode for Stop {
             caller_ctx.memory.extend_at_least(length as usize);
             Ok(caller_ctx.memory.clone())
         } else {
-            Ok(geth_steps[0].memory.replace(Memory::default()))
+            Ok(geth_steps[0].memory.borrow().clone())
         }
     }
 }

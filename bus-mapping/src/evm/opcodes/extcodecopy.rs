@@ -38,7 +38,7 @@ impl Opcode for Extcodecopy {
         assert!(exist, "target account does not exist");
         let code = state.code(account.code_hash)?;
 
-        let mut memory = geth_steps[0].memory.replace(Memory::default());
+        let mut memory = geth_steps[0].memory.borrow().clone();
         if length != 0 {
             let minimal_length = (dest_offset + length) as usize;
             memory.extend_at_least(minimal_length);

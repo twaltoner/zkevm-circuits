@@ -16,7 +16,6 @@ impl Opcode for Return {
     ) -> Result<Vec<ExecStep>, Error> {
         let exec_step = state.new_step(&geth_steps[0])?;
         state.handle_return(&geth_steps[0])?;
-        geth_steps[0].memory.replace(Memory::default());
         Ok(vec![exec_step])
     }
 
@@ -36,19 +35,38 @@ impl Opcode for Return {
 
         // skip reconstruction for root-level return/revert
         if !current_call.is_root {
+            let caller = state.caller()?.clone();
             if !current_call.is_create() {
                 // handle normal return/revert
                 // copy return data
                 // update to the caller memory
                 let caller_ctx = state.caller_ctx_mut()?;
+                println!("call {:?} ", current_call);
+                println!("caller_call {:?}", caller);
+                println!("in return  reconstruct_memory");
+                println!("before caller_ctx.memory {:?}", caller_ctx.memory);
+                println!(
+                    "current_call.return_data_offset {} length {} ",
+                    current_call.return_data_offset, length
+                );
                 let return_offset = current_call.return_data_offset as usize;
-                caller_ctx.memory.extend_at_least(return_offset + length);
-                caller_ctx.memory.0[return_offset..return_offset + length]
-                    .copy_from_slice(&memory.0[offset..offset + length]);
+                caller_ctx
+                    .memory
+                    .extend_at_least(return_offset + current_call.return_data_length as usize);
+                let copy_len = std::cmp::min(current_call.return_data_length as usize, length);
+
+                println!("current_call.return_data_offset {} current_call.return_data_length {} copy_len {}", current_call.return_data_offset, current_call.return_data_length, copy_len);
+                caller_ctx.memory.0[return_offset..return_offset + copy_len]
+                    .copy_from_slice(&memory.0[offset..offset + copy_len]);
+
                 caller_ctx.return_data.resize(length as usize, 0);
                 caller_ctx
                     .return_data
                     .copy_from_slice(&memory.0[offset..offset + length]);
+                println!(
+                    "after rebuild caller_ctx.memory {:?} caller_ctx.return_data {:?}",
+                    caller_ctx.memory, caller_ctx.return_data
+                );
                 caller_ctx.last_call = Some(current_call);
             } else {
                 // dealing with contract creation

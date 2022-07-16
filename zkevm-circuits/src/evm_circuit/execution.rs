@@ -185,7 +185,7 @@ pub(crate) struct ExecutionConfig<F> {
     codesize_gadget: CodesizeGadget<F>,
     comparator_gadget: ComparatorGadget<F>,
     copy_code_to_memory_gadget: CopyCodeToMemoryGadget<F>,
-    copy_to_log_gadget: CopyToLogGadget<F>,
+    copy_to_log_gadget: DummyGadget<F, 0, 0, { ExecutionState::CopyToLog }>,
     dup_gadget: DupGadget<F>,
     dummy_gadget: DummyGadget<F, 0, 0, { ExecutionState::DUMMY }>,
     extcodehash_gadget: ExtcodehashGadget<F>,
@@ -195,7 +195,7 @@ pub(crate) struct ExecutionConfig<F> {
     jump_gadget: JumpGadget<F>,
     jumpdest_gadget: JumpdestGadget<F>,
     jumpi_gadget: JumpiGadget<F>,
-    log_gadget: LogGadget<F>,
+    log_gadget: DummyGadget<F, 0, 0, { ExecutionState::LOG }>,
     memory_gadget: MemoryGadget<F>,
     msize_gadget: MsizeGadget<F>,
     mul_div_mod_gadget: MulDivModGadget<F>,
@@ -875,6 +875,13 @@ impl<F: Field> ExecutionConfig<F> {
         next: Option<&(&Transaction, &Call, &ExecStep)>,
         power_of_randomness: [F; 31],
     ) -> Result<(), Error> {
+        log::trace!(
+            "assign_exec_step offset: {} state {:?} step: {:?} call: {:?}",
+            offset,
+            step.execution_state,
+            step,
+            call
+        );
         // Make the region large enough for the current step and the next step.
         // The next step's next step may also be accessed, so make the region large
         // enough for 3 steps.
@@ -914,12 +921,6 @@ impl<F: Field> ExecutionConfig<F> {
         call: &Call,
         step: &ExecStep,
     ) -> Result<(), Error> {
-        log::trace!(
-            "assign_exec_step offset: {} step: {:?} call: {:?}",
-            offset,
-            step,
-            call
-        );
         self.step
             .assign_exec_step(region, offset, block, transaction, call, step)?;
 
@@ -935,7 +936,7 @@ impl<F: Field> ExecutionConfig<F> {
             // internal states
             ExecutionState::BeginTx => assign_exec_step!(self.begin_tx_gadget),
             ExecutionState::CopyCodeToMemory => assign_exec_step!(self.copy_code_to_memory_gadget),
-            ExecutionState::CopyToLog => assign_exec_step!(self.dummy_gadget),
+            ExecutionState::CopyToLog => assign_exec_step!(self.copy_to_log_gadget),
             ExecutionState::CopyToMemory => assign_exec_step!(self.copy_to_memory_gadget),
             ExecutionState::EndTx => assign_exec_step!(self.end_tx_gadget),
             ExecutionState::EndBlock => assign_exec_step!(self.end_block_gadget),
@@ -962,7 +963,7 @@ impl<F: Field> ExecutionConfig<F> {
             ExecutionState::JUMP => assign_exec_step!(self.jump_gadget),
             ExecutionState::JUMPDEST => assign_exec_step!(self.jumpdest_gadget),
             ExecutionState::JUMPI => assign_exec_step!(self.jumpi_gadget),
-            ExecutionState::LOG => assign_exec_step!(self.dummy_gadget),
+            ExecutionState::LOG => assign_exec_step!(self.log_gadget),
             ExecutionState::MEMORY => assign_exec_step!(self.memory_gadget),
             ExecutionState::MSIZE => assign_exec_step!(self.msize_gadget),
             ExecutionState::MUL_DIV_MOD => assign_exec_step!(self.mul_div_mod_gadget),

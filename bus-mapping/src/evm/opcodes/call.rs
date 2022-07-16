@@ -181,8 +181,6 @@ impl Opcode for Call {
 
         // Switch to callee's call context
         state.push_call(call.clone(), geth_step);
-        // release the memory at here
-        geth_steps[0].memory.replace(Memory::default());
 
         for (field, value) in [
             (CallContextField::RwCounterEndOfReversion, 0.into()),
@@ -218,6 +216,7 @@ impl Opcode for Call {
             // 1. Call to precompiled.
             (true, _) => {
                 warn!("Call to precompiled is left unimplemented");
+                state.handle_return(geth_step)?;
                 Ok(vec![exec_step])
             }
             // 2. Call to account with empty code.

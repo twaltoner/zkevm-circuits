@@ -49,7 +49,7 @@ impl Opcode for Codecopy {
         let code_hash = state.call()?.code_hash;
         let code = state.code(code_hash)?;
 
-        let mut memory = geth_steps[0].memory.replace(Memory::default());
+        let mut memory = geth_steps[0].memory.borrow().clone();
         if length != 0 {
             let minimal_length = (dest_offset + length) as usize;
             memory.extend_at_least(minimal_length);
@@ -67,6 +67,12 @@ impl Opcode for Codecopy {
                 // out of bound bytes
             }
         }
+        log::trace!(
+            "codecopy reconstruct_memory next size 0.len {} len {} word size {}",
+            memory.0.len(),
+            memory.len(),
+            memory.word_size()
+        );
         Ok(memory)
     }
 }
@@ -135,6 +141,13 @@ fn gen_memory_copy_steps(
     let mut steps = vec![];
     while copied < length {
         let mut exec_step = state.new_step(&geth_steps[1])?;
+        if length != 0 {
+            assert_ne!(
+                exec_step.memory_size, 0,
+                "invalid exec_step.memory_size cur geth step {:?} next geth step {:?}",
+                geth_steps[0], geth_steps[1]
+            );
+        }
         exec_step.exec_state = ExecState::CopyCodeToMemory;
         gen_memory_copy_step(
             state,

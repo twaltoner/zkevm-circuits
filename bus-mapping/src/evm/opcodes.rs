@@ -102,7 +102,7 @@ pub trait Opcode: Debug {
         _state: &mut CircuitInputStateRef,
         geth_steps: &[GethExecStep],
     ) -> Result<Memory, Error> {
-        Ok(geth_steps[0].memory.replace(Memory::default()))
+        Ok(geth_steps[0].memory.borrow().clone())
     }
 }
 
@@ -274,7 +274,12 @@ pub fn gen_associated_ops(
     if geth_steps.len() > 1 {
         if !geth_steps[1].memory.borrow().is_empty() {
             // memory trace is enabled or it is a call
-            assert_eq!(geth_steps[1].memory.borrow().deref(), &memory, "{:?} goes wrong", opcode_id);
+            assert_eq!(
+                geth_steps[1].memory.borrow().deref(),
+                &memory,
+                "{:?} goes wrong",
+                opcode_id
+            );
         } else {
             if opcode_id.is_call() {
                 if geth_steps[0].depth == geth_steps[1].depth {
@@ -290,8 +295,32 @@ pub fn gen_associated_ops(
             }
         }
         state.call_ctx_mut()?.memory = memory;
+        /*
+        log::info!(
+            "MEM depth {} next depth {} state len {} next mem len {}  state {:?} next mem {:?}",
+            geth_steps[0].depth,
+            geth_steps[1].depth,
+            state.call_ctx_mut()?.memory.len(),
+            geth_steps[1].memory.borrow().len(),
+            state.call_ctx_mut()?.memory,
+            geth_steps[1].memory.borrow().clone()
+        );
+        */
+        if geth_steps[0].depth == geth_steps[1].depth {
+            if state.call_ctx_mut()?.memory != geth_steps[1].memory.borrow().clone() {
+                log::error!(
+                    "state {:?} next {:?}",
+                    state.call_ctx_mut()?.memory,
+                    geth_steps[1].memory
+                );
+            }
+        }
     }
-    opcode.gen_associated_ops(state, geth_steps)
+    let steps = opcode.gen_associated_ops(state, geth_steps)?;
+    log::trace!("opcode steps result: {:?}", steps);
+    // release after use
+    geth_steps[0].memory.replace(Memory::default());
+    Ok(steps)
 }
 
 pub fn gen_begin_tx_ops(state: &mut CircuitInputStateRef) -> Result<ExecStep, Error> {
@@ -551,6 +580,15 @@ impl Opcode for DummyCall {
     ) -> Result<Vec<ExecStep>, Error> {
         dummy_gen_call_ops(state, geth_steps)
     }
+    fn reconstruct_memory(
+        &self,
+        _state: &mut CircuitInputStateRef,
+        geth_steps: &[GethExecStep],
+    ) -> Result<Memory, Error> {
+        //step.mem needed by push_call;
+        // TODO: huaqing
+        Ok(geth_steps[0].memory.borrow().clone())
+    }
 }
 
 fn dummy_gen_call_ops(
@@ -585,7 +623,10 @@ fn dummy_gen_call_ops(
         callee_code_hash.to_fixed_bytes() == *EMPTY_HASH,
     ) {
         // 1. Call to precompiled.
-        (true, _) => Ok(vec![exec_step]),
+        (true, _) => {
+            state.handle_return(geth_step)?;
+            Ok(vec![exec_step])
+        }
         // 2. Call to account with empty code.
         (_, true) => {
             state.handle_return(geth_step)?;
