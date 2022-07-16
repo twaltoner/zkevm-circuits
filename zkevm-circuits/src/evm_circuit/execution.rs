@@ -935,7 +935,7 @@ impl<F: Field> ExecutionConfig<F> {
             // internal states
             ExecutionState::BeginTx => assign_exec_step!(self.begin_tx_gadget),
             ExecutionState::CopyCodeToMemory => assign_exec_step!(self.copy_code_to_memory_gadget),
-            ExecutionState::CopyToLog => assign_exec_step!(self.copy_to_log_gadget),
+            ExecutionState::CopyToLog => assign_exec_step!(self.dummy_gadget),
             ExecutionState::CopyToMemory => assign_exec_step!(self.copy_to_memory_gadget),
             ExecutionState::EndTx => assign_exec_step!(self.end_tx_gadget),
             ExecutionState::EndBlock => assign_exec_step!(self.end_block_gadget),
@@ -962,7 +962,7 @@ impl<F: Field> ExecutionConfig<F> {
             ExecutionState::JUMP => assign_exec_step!(self.jump_gadget),
             ExecutionState::JUMPDEST => assign_exec_step!(self.jumpdest_gadget),
             ExecutionState::JUMPI => assign_exec_step!(self.jumpi_gadget),
-            ExecutionState::LOG => assign_exec_step!(self.log_gadget),
+            ExecutionState::LOG => assign_exec_step!(self.dummy_gadget),
             ExecutionState::MEMORY => assign_exec_step!(self.memory_gadget),
             ExecutionState::MSIZE => assign_exec_step!(self.msize_gadget),
             ExecutionState::MUL_DIV_MOD => assign_exec_step!(self.mul_div_mod_gadget),
@@ -1063,7 +1063,7 @@ impl<F: Field> ExecutionConfig<F> {
 
         let assigned_stored_expressions = self.assign_stored_expressions(region, offset, step)?;
 
-        if !is_dummy {
+        if true || !is_dummy {
             Self::check_rw_lookup(&assigned_stored_expressions, step, block);
         }
         Ok(())

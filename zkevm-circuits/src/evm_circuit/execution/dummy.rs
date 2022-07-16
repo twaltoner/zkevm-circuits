@@ -33,10 +33,10 @@ impl<F: Field, const N_POP: usize, const N_PUSH: usize, const S: ExecutionState>
         let pops: [Word<F>; N_POP] = [(); N_POP].map(|_| cb.query_word());
         let pushes: [Word<F>; N_PUSH] = [(); N_PUSH].map(|_| cb.query_word());
         for pop in pops.iter() {
-            cb.stack_pop(pop.expr());
+            //cb.stack_pop(pop.expr());
         }
         for push in pushes.iter() {
-            cb.stack_push(push.expr());
+            //cb.stack_push(push.expr());
         }
         Self {
             pops,
@@ -58,8 +58,8 @@ impl<F: Field, const N_POP: usize, const N_PUSH: usize, const S: ExecutionState>
         // process of being implemented but are still
         // using DummyGadget.
         // See `bus-mapping/src/evm/opcodes.rs`
-        if step.rw_indices.len() != N_POP + N_PUSH {
-            log::warn!("DummyGadget: wrong number of rw indices for {:?}", step);
+        if true || step.rw_indices.len() != N_POP + N_PUSH {
+            //log::warn!("DummyGadget: wrong number of rw indices for {:?}", step);
             return Ok(());
         }
 
