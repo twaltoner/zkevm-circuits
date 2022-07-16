@@ -668,7 +668,7 @@ impl OpcodeId {
         }
     }
 
-    /// Returns if the `OpcodeId` has memory access
+    /// Returns `true` if the `OpcodeId` has memory access
     pub const fn has_memory_access(&self) -> bool {
         matches!(
             self,

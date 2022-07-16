@@ -13,6 +13,7 @@ impl Opcode for Returndatacopy {
         state: &mut CircuitInputStateRef,
         geth_steps: &[GethExecStep],
     ) -> Result<Vec<ExecStep>, Error> {
+        // TODO: complete `ExecStep` and circuit implementation
         let exec_step = state.new_step(&geth_steps[0])?;
         Ok(vec![exec_step])
     }
@@ -30,7 +31,7 @@ impl Opcode for Returndatacopy {
         let call = state.call_ctx()?;
         let return_data = &call.return_data;
 
-        let mut memory = geth_step.memory.borrow().clone();
+        let mut memory = geth_step.memory.replace(Memory::default());
         let length = size.as_usize();
         if length != 0 {
             let mem_starts = dest_offset.as_usize();

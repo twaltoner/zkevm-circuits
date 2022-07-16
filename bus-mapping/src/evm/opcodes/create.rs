@@ -15,6 +15,7 @@ impl<const IS_CREATE2: bool> Opcode for DummyCreate<IS_CREATE2> {
         state: &mut CircuitInputStateRef,
         geth_steps: &[GethExecStep],
     ) -> Result<Vec<ExecStep>, Error> {
+        // TODO: replace dummy create here
         let geth_step = &geth_steps[0];
         let mut exec_step = state.new_step(geth_step)?;
 

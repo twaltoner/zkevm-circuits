@@ -96,12 +96,13 @@ pub trait Opcode: Debug {
         geth_steps: &[GethExecStep],
     ) -> Result<Vec<ExecStep>, Error>;
 
+    /// Reconstruct memory for next step from current step.
     fn reconstruct_memory(
         &self,
         _state: &mut CircuitInputStateRef,
         geth_steps: &[GethExecStep],
     ) -> Result<Memory, Error> {
-        Ok(geth_steps[0].memory.borrow().clone())
+        Ok(geth_steps[0].memory.replace(Memory::default()))
     }
 }
 
@@ -273,7 +274,7 @@ pub fn gen_associated_ops(
     if geth_steps.len() > 1 {
         if !geth_steps[1].memory.borrow().is_empty() {
             // memory trace is enabled or it is a call
-            assert_eq!(geth_steps[1].memory.borrow().deref(), &memory);
+            assert_eq!(geth_steps[1].memory.borrow().deref(), &memory, "{:?} goes wrong", opcode_id);
         } else {
             if opcode_id.is_call() {
                 if geth_steps[0].depth == geth_steps[1].depth {

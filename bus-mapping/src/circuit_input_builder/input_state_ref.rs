@@ -17,7 +17,7 @@ use crate::{
 };
 use eth_types::{
     evm_types::{Gas, MemoryAddress, OpcodeId, StackAddress},
-    Address, GethExecStep, Hash, ToAddress, ToBigEndian, Word, H256,
+    Address, GethExecStep, ToAddress, ToBigEndian, Word, H256,
 };
 use ethers_core::utils::{get_contract_address, get_create2_address};
 
@@ -441,14 +441,6 @@ impl<'a> CircuitInputStateRef<'a> {
         self.transfer_with_fee(step, sender, receiver, value, Word::zero())
     }
 
-    pub fn code_hash(&self, address: Address) -> Result<Hash, Error> {
-        self.code_db
-            .address_hash
-            .get(&address)
-            .copied()
-            .ok_or(Error::AccountNotFound(address))
-    }
-
     /// Fetch and return code for the given code hash from the code DB.
     pub fn code(&self, code_hash: H256) -> Result<Vec<u8>, Error> {
         self.code_db
@@ -494,6 +486,7 @@ impl<'a> CircuitInputStateRef<'a> {
         self.tx_ctx.call_ctx_mut()
     }
 
+    /// Mutable reference to the caller CallContext
     pub fn caller_ctx_mut(&mut self) -> Result<&mut CallContext, Error> {
         self.tx_ctx
             .calls
@@ -545,7 +538,7 @@ impl<'a> CircuitInputStateRef<'a> {
         Ok(get_create2_address(
             self.call()?.address,
             salt.to_be_bytes().to_vec(),
-            init_code.to_vec(),
+            init_code,
         ))
     }
 
@@ -589,7 +582,7 @@ impl<'a> CircuitInputStateRef<'a> {
         let (code_source, code_hash) = match kind {
             CallKind::Create | CallKind::Create2 => {
                 let init_code = get_create_init_code(step)?;
-                let code_hash = self.code_db.insert(None, init_code.to_vec());
+                let code_hash = self.code_db.insert(None, init_code);
                 (CodeSource::Memory, code_hash)
             }
             _ => {
