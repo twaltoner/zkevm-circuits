@@ -760,7 +760,11 @@ impl<F: Field> ExecutionConfig<F> {
                     let next = steps.peek();
                     if let Some(&(t, c, s)) = next {
                         if t != transaction {
-                            log::info!("assign last step {:?} of tx {:?}", step, transaction);
+                            let mut tt = transaction.clone();
+                            tt.call_data.clear();
+                            tt.calls.clear();
+                            tt.steps.clear();
+                            log::info!("assign last step of tx {:?}", tt);
                         }
                     } else {
                         log::info!("assign last step of block");
