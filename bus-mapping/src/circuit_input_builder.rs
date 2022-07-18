@@ -152,8 +152,10 @@ impl<'a> CircuitInputBuilder {
                 continue;
             }
             log::info!("handling {}th tx {:?}", tx.transaction_index.unwrap_or_default(), tx.hash);
+            let mut tx = tx.clone();
+            tx.transaction_index = Some(self.block.txs.len().into());
             self.handle_tx(
-                tx,
+                &tx,
                 geth_trace,
                 tx_index + 1 == eth_block.transactions.len(),
                 &mut cumulative_gas_used,
