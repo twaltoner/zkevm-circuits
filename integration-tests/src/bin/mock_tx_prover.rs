@@ -2,10 +2,11 @@ use bus_mapping::{
     circuit_input_builder::{BuilderClient, ExecState},
     evm::OpcodeId,
 };
-use integration_tests::{get_client, log_init, TX_ID};
+use halo2_proofs::{dev::MockProver, pairing::bn256::Fr};
+use integration_tests::{get_client, log_init, PAR, TX_ID};
+use strum::IntoEnumIterator;
 use zkevm_circuits::evm_circuit::{
-    test::{run_test_circuit_complete_fixed_table, run_test_circuit_incomplete_fixed_table},
-    witness::block_convert,
+    table::FixedTableTag, test::TestCircuit, witness::block_convert,
 };
 
 #[tokio::main]
@@ -32,10 +33,25 @@ async fn main() {
             )
         })
     });
-    if need_bitwise_lookup {
-        run_test_circuit_complete_fixed_table(block).expect("evm_circuit verification failed");
+
+    let fixed_table_tags = FixedTableTag::iter()
+        .filter(|t| {
+            need_bitwise_lookup
+                || !matches!(
+                    t,
+                    FixedTableTag::BitwiseAnd
+                        | FixedTableTag::BitwiseOr
+                        | FixedTableTag::BitwiseXor
+                )
+        })
+        .collect();
+    let circuit = TestCircuit::<Fr>::new(block.clone(), fixed_table_tags);
+    let k = circuit.estimate_k();
+    let prover = MockProver::<Fr>::run(k, &circuit, vec![]).unwrap();
+    if *PAR {
+        prover.verify_par().unwrap();
     } else {
-        run_test_circuit_incomplete_fixed_table(block).expect("evm_circuit verification failed");
+        prover.verify().unwrap();
     }
     log::info!("prove done");
 }

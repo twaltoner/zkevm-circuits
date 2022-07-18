@@ -65,6 +65,12 @@ lazy_static! {
         Err(VarError::NotPresent) => "0x4096e88107bd14522dfc3500325bff580728504580f5103d8247a2a32425889f".to_string(),
         Err(e) => panic!("Error in TX_ID env var: {:?}", e),
     };
+    /// ..
+    pub static ref PAR: bool =  match env::var("PAR") {
+        Ok(val) => val.parse().unwrap(),
+        Err(VarError::NotPresent) => true,
+        Err(e) => panic!("Error in PAR env var: {:?}", e),
+    };
 
 }
 
