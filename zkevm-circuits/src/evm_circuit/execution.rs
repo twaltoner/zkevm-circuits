@@ -757,6 +757,14 @@ impl<F: Field> ExecutionConfig<F> {
                 while let Some((transaction, call, step)) = steps.next() {
                     let height = self.get_step_height(step.execution_state);
                     // Assign the step witness
+                    let next = steps.peek();
+                    if let Some(&(t, c, s)) = next {
+                        if t != transaction {
+                            log::info!("assign last step {:?} of tx {:?}", step, transaction);
+                        }
+                    } else {
+                        log::info!("assign last step of block");
+                    }
                     self.assign_exec_step(
                         &mut region,
                         offset,
@@ -765,7 +773,7 @@ impl<F: Field> ExecutionConfig<F> {
                         call,
                         step,
                         height,
-                        steps.peek(),
+                        next,
                         power_of_randomness,
                     )?;
                     // q_step logic

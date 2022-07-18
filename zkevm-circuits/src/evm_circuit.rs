@@ -389,7 +389,7 @@ pub mod test {
                     .sum::<usize>(),
             ));
 
-            log::debug!("evm circuit uses k = {}", k);
+            log::info!("evm circuit uses k = {}", k);
             k
         }
     }
