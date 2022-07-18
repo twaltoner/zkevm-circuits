@@ -6,7 +6,7 @@ use crate::evm_circuit::{
     util::{constraint_builder::ConstraintBuilder, CachedRegion, Word},
     witness::{Block, Call, ExecStep, Transaction},
 };
-use crate::util::Expr;
+
 use eth_types::Field;
 use eth_types::ToLittleEndian;
 use halo2_proofs::plonk::Error;
@@ -32,10 +32,10 @@ impl<F: Field, const N_POP: usize, const N_PUSH: usize, const S: ExecutionState>
     fn configure(cb: &mut ConstraintBuilder<F>) -> Self {
         let pops: [Word<F>; N_POP] = [(); N_POP].map(|_| cb.query_word());
         let pushes: [Word<F>; N_PUSH] = [(); N_PUSH].map(|_| cb.query_word());
-        for pop in pops.iter() {
+        for _pop in pops.iter() {
             //cb.stack_pop(pop.expr());
         }
-        for push in pushes.iter() {
+        for _push in pushes.iter() {
             //cb.stack_push(push.expr());
         }
         Self {

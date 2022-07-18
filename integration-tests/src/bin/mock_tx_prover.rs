@@ -45,11 +45,16 @@ async fn main() {
                 )
         })
         .collect();
-    let circuit = TestCircuit::<Fr>::new(block.clone(), fixed_table_tags);
+    let (active_gate_rows, active_lookup_rows) = TestCircuit::get_active_rows(&block);
+
+    let circuit = TestCircuit::<Fr>::new(block, fixed_table_tags);
     let k = circuit.estimate_k();
     let prover = MockProver::<Fr>::run(k, &circuit, vec![]).unwrap();
     if *PAR {
-        prover.verify_par().unwrap();
+        prover
+            .verify_at_rows_par(active_gate_rows.into_iter(), active_lookup_rows.into_iter())
+            .unwrap();
+        //prover.verify_par().unwrap();
     } else {
         prover.verify().unwrap();
     }

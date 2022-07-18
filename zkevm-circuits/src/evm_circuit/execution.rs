@@ -93,7 +93,7 @@ use codecopy::CodeCopyGadget;
 use codesize::CodesizeGadget;
 use comparator::ComparatorGadget;
 use copy_code_to_memory::CopyCodeToMemoryGadget;
-use copy_to_log::CopyToLogGadget;
+
 use dummy::DummyGadget;
 use dup::DupGadget;
 use end_block::EndBlockGadget;
@@ -107,7 +107,7 @@ use is_zero::IsZeroGadget;
 use jump::JumpGadget;
 use jumpdest::JumpdestGadget;
 use jumpi::JumpiGadget;
-use logs::LogGadget;
+
 use memory::MemoryGadget;
 use memory_copy::CopyToMemoryGadget;
 use msize::MsizeGadget;
@@ -766,7 +766,7 @@ impl<F: Field> ExecutionConfig<F> {
                     let height = self.get_step_height(step.execution_state);
                     // Assign the step witness
                     let next = steps.peek();
-                    if let Some(&(t, c, s)) = next {
+                    if let Some(&(t, _c, _s)) = next {
                         if t != transaction {
                             let mut tt = transaction.clone();
                             tt.call_data.clear();

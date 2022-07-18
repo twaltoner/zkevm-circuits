@@ -7,7 +7,7 @@ use crate::{
 use eth_types::{
     evm_types::{
         gas_utils::{eip150_gas, memory_expansion_gas_cost},
-        GasCost,
+        GasCost, OpcodeId,
     },
     GethExecStep, ToWord,
 };
@@ -20,36 +20,54 @@ use std::cmp::max;
 #[derive(Debug, Copy, Clone)]
 pub(crate) struct Call;
 
+pub fn call_reconstruct_memory(
+    state: &mut CircuitInputStateRef,
+    geth_steps: &[GethExecStep],
+) -> Result<usize, Error> {
+    let geth_step = &geth_steps[0];
+
+    let [args_offset, args_length, ret_offset, ret_length]: [usize; 4] = match geth_step.op {
+        OpcodeId::DELEGATECALL | OpcodeId::STATICCALL => {
+            vec![2, 3, 4, 5]
+        }
+        OpcodeId::CALL | OpcodeId::CALLCODE => {
+            vec![3, 4, 5, 6]
+        }
+        _ => {
+            unreachable!()
+        }
+    }
+    .into_iter()
+    .map(|i| -> Result<usize, Error> { Ok(geth_step.stack.nth_last(i)?.as_usize()) })
+    .collect::<Result<Vec<usize>, Error>>()?
+    .try_into()
+    .unwrap();
+
+    let args_minimal = if args_length != 0 {
+        args_offset + args_length
+    } else {
+        0
+    };
+    let ret_minimal = if ret_length != 0 {
+        ret_offset + ret_length
+    } else {
+        0
+    };
+    let minimal_length = max(args_minimal, ret_minimal);
+    Ok(minimal_length)
+}
 impl Opcode for Call {
     fn gen_associated_ops(
         &self,
         state: &mut CircuitInputStateRef,
         geth_steps: &[GethExecStep],
     ) -> Result<Vec<ExecStep>, Error> {
-        let geth_step = &geth_steps[0];
-
-        let args_offset = geth_step.stack.nth_last(3)?.as_usize();
-        let args_length = geth_step.stack.nth_last(4)?.as_usize();
-        let ret_offset = geth_step.stack.nth_last(5)?.as_usize();
-        let ret_length = geth_step.stack.nth_last(6)?.as_usize();
-
+        let minimal_length = call_reconstruct_memory(state, geth_steps)?;
         // we need to keep the memory until parse_call complete
         let call_ctx = state.call_ctx_mut()?;
-        let args_minimal = if args_length != 0 {
-            args_offset + args_length
-        } else {
-            0
-        };
-        let ret_minimal = if ret_length != 0 {
-            ret_offset + ret_length
-        } else {
-            0
-        };
-        if args_minimal != 0 || ret_minimal != 0 {
-            let minimal_length = max(args_minimal, ret_minimal);
-            call_ctx.memory.extend_at_least(minimal_length);
-        }
+        call_ctx.memory.extend_at_least(minimal_length);
 
+        let geth_step = &geth_steps[0];
         let mut exec_step = state.new_step(geth_step)?;
 
         let tx_id = state.tx_ctx.id();
@@ -93,94 +111,7 @@ impl Opcode for Call {
             (call.is_success as u64).into(),
         )?;
 
-        let has_value = !call.value.is_zero();
-
-        // Calculate next_memory_word_size and callee_gas_left manually in case
-        // there isn't next geth_step (e.g. callee doesn't have code).
-        let next_memory_word_size = [
-            geth_step.memory.borrow().word_size() as u64,
-            (call.call_data_offset + call.call_data_length + 31) / 32,
-            (call.return_data_offset + call.return_data_length + 31) / 32,
-        ]
-        .into_iter()
-        .max()
-        .unwrap();
-        let curr_memory_word_size = geth_step.memory.borrow().word_size() as u64;
-        let memory_expansion_gas_cost =
-            memory_expansion_gas_cost(curr_memory_word_size, next_memory_word_size);
-
-        let gas_specified = geth_step.stack.last().unwrap();
-        let callee_account = {
-            let (_, callee_account) = state.sdb.get_account(&call.address);
-            callee_account.clone()
-        };
-        let is_account_empty = callee_account.is_empty();
-
-        let g = |is_warm: bool, is_account_empty: bool, has_value: bool| {
-            let gas_cost = if is_warm {
-                GasCost::WARM_ACCESS.as_u64()
-            } else {
-                GasCost::COLD_ACCOUNT_ACCESS.as_u64()
-            } + if has_value {
-                GasCost::CALL_WITH_VALUE.as_u64()
-                    + if is_account_empty {
-                        GasCost::NEW_ACCOUNT.as_u64()
-                    } else {
-                        0
-                    }
-            } else {
-                0
-            } + memory_expansion_gas_cost;
-            let callee_gas_left = eip150_gas(geth_step.gas.0 - gas_cost, gas_specified);
-            (gas_cost, callee_gas_left)
-        };
-
-        let mut is_warm = state.sdb.check_account_in_access_list(&call.address);
-
-        let (mut gas_cost, mut callee_gas_left) = g(is_warm, is_account_empty, has_value);
-
-        if geth_steps[0].depth + 1 == geth_steps[1].depth {
-            let callee_gas_left_expected = geth_steps[1].gas.0 - if has_value { 2300 } else { 0 };
-            if false && callee_gas_left != callee_gas_left_expected {
-                let (gas_cost_new, callee_gas_left_new) = g(!is_warm, is_account_empty, has_value);
-                if callee_gas_left_new == callee_gas_left_expected {
-                    log::error!(
-                        "call: access list of {} must be wrong, flip to {}",
-                        call.address,
-                        !is_warm
-                    );
-                    is_warm = !is_warm;
-                    gas_cost = gas_cost_new;
-                    callee_gas_left = callee_gas_left_new;
-                }
-            }
-            if callee_gas_left != callee_gas_left_expected {
-                // panic with full info
-
-                let info1 = format!("callee_gas_left {} gas_specified {} gas_cost {} is_warm {} has_value {} is_account_empty {} current_memory_word_size {} next_memory_word_size {}, memory_expansion_gas_cost {}",
-                callee_gas_left, gas_specified, gas_cost, is_warm, has_value, is_account_empty, curr_memory_word_size, next_memory_word_size, memory_expansion_gas_cost);
-                let info2 = format!("args gas:{:?} addr:{:?} value:{:?} cd_pos:{:?} cd_len:{:?} rd_pos:{:?} rd_len:{:?}", 
-                    geth_step.stack.nth_last(0),
-                    geth_step.stack.nth_last(1),
-                    geth_step.stack.nth_last(2),
-                    geth_step.stack.nth_last(3),
-                    geth_step.stack.nth_last(4),
-                    geth_step.stack.nth_last(5),
-                    geth_step.stack.nth_last(6)
-                );
-                let full_ctx = format!(
-                    "step0 {:?} step1 {:?} call {:?}, {} {}",
-                    geth_steps[0], geth_steps[1], call, info1, info2
-                );
-                debug_assert_eq!(
-                    geth_steps[1].gas.0,
-                    callee_gas_left + if has_value { 2300 } else { 0 },
-                    "{}",
-                    full_ctx
-                );
-            }
-        }
-
+        let is_warm = state.sdb.check_account_in_access_list(&call.address);
         state.push_op_reversible(
             &mut exec_step,
             RW::WRITE,
@@ -191,6 +122,8 @@ impl Opcode for Call {
                 is_warm_prev: is_warm,
             },
         )?;
+
+        let curr_memory_word_size = state.call_ctx()?.memory.word_size() as u64;
 
         // Switch to callee's call context
         state.push_call(call.clone());
@@ -211,7 +144,8 @@ impl Opcode for Call {
             call.address,
             call.value,
         )?;
-
+        let (_, callee_account) = state.sdb.get_account(&call.address);
+        let is_account_empty = callee_account.is_empty();
         let callee_nonce = callee_account.nonce;
         let callee_code_hash = callee_account.code_hash;
         for (field, value) in [
@@ -221,7 +155,66 @@ impl Opcode for Call {
             state.account_read(&mut exec_step, call.address, field, value, value)?;
         }
 
-        let current_call_ctx = state.call_ctx()?;
+        // Calculate next_memory_word_size and callee_gas_left manually in case
+        // there isn't next geth_step (e.g. callee doesn't have code).
+        let next_memory_word_size = [
+            curr_memory_word_size,
+            (call.call_data_offset + call.call_data_length + 31) / 32,
+            (call.return_data_offset + call.return_data_length + 31) / 32,
+        ]
+        .into_iter()
+        .max()
+        .unwrap();
+
+        let has_value = !call.value.is_zero();
+
+        let memory_expansion_gas_cost =
+            memory_expansion_gas_cost(curr_memory_word_size, next_memory_word_size);
+        let gas_cost = if is_warm {
+            GasCost::WARM_ACCESS.as_u64()
+        } else {
+            GasCost::COLD_ACCOUNT_ACCESS.as_u64()
+        } + if has_value {
+            GasCost::CALL_WITH_VALUE.as_u64()
+                + if is_account_empty {
+                    GasCost::NEW_ACCOUNT.as_u64()
+                } else {
+                    0
+                }
+        } else {
+            0
+        } + memory_expansion_gas_cost;
+        let gas_specified = geth_step.stack.last()?;
+        let callee_gas_left = eip150_gas(geth_step.gas.0 - gas_cost, gas_specified);
+
+        if geth_steps[1].depth == geth_steps[0].depth + 1 {
+            if geth_steps[1].gas.0 != callee_gas_left + if has_value { 2300 } else { 0 } {
+                // panic with full info
+
+                let info1 = format!("callee_gas_left {} gas_specified {} gas_cost {} is_warm {} has_value {} is_account_empty {} current_memory_word_size {} next_memory_word_size {}, memory_expansion_gas_cost {}",
+                        callee_gas_left, gas_specified, gas_cost, is_warm, has_value, is_account_empty, curr_memory_word_size, next_memory_word_size, memory_expansion_gas_cost);
+                let info2 = format!("args gas:{:?} addr:{:?} value:{:?} cd_pos:{:?} cd_len:{:?} rd_pos:{:?} rd_len:{:?}",
+                            geth_step.stack.nth_last(0),
+                            geth_step.stack.nth_last(1),
+                            geth_step.stack.nth_last(2),
+                            geth_step.stack.nth_last(3),
+                            geth_step.stack.nth_last(4),
+                            geth_step.stack.nth_last(5),
+                            geth_step.stack.nth_last(6)
+                        );
+                let full_ctx = format!(
+                    "step0 {:?} step1 {:?} call {:?}, {} {}",
+                    geth_steps[0], geth_steps[1], call, info1, info2
+                );
+                debug_assert_eq!(
+                    geth_steps[1].gas.0,
+                    callee_gas_left + if has_value { 2300 } else { 0 },
+                    "{}",
+                    full_ctx
+                );
+            }
+        }
+
         // There are 3 branches from here.
         match (
             state.is_precompiled(&call.address),

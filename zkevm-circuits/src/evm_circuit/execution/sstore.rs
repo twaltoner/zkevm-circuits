@@ -298,7 +298,7 @@ impl<F: Field> SstoreGasGadget<F> {
         &self,
         region: &mut CachedRegion<'_, '_, F>,
         offset: usize,
-        gas_cost: u64,
+        _gas_cost: u64,
         value: eth_types::Word,
         value_prev: eth_types::Word,
         original_value: eth_types::Word,

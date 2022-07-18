@@ -14,7 +14,7 @@ use eth_types::{
 };
 use keccak256::EMPTY_HASH;
 use log::warn;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
 mod balance;
 mod call;
@@ -78,6 +78,8 @@ use sstore::Sstore;
 use stackonlyop::StackOnlyOpcode;
 use stop::Stop;
 use swap::Swap;
+
+use self::call::call_reconstruct_memory;
 
 /// Generic opcode trait which defines the logic of the
 /// [`Operation`](crate::operation::Operation) that should be generated for one
@@ -283,8 +285,10 @@ pub fn gen_associated_ops(
         assert_eq!(
             &state.call_ctx()?.memory,
             &geth_steps[0].memory,
-            "last step of {:?} goes wrong",
-            opcode_id
+            "last step of {:?} goes wrong. len in state {}, len in step0 {}",
+            opcode_id,
+            &state.call_ctx()?.memory.len(),
+            &geth_steps[0].memory.len(),
         );
     }
 
@@ -572,21 +576,17 @@ impl Opcode for DummyCall {
     ) -> Result<Vec<ExecStep>, Error> {
         dummy_gen_call_ops(state, geth_steps)
     }
-    fn reconstruct_memory(
-        &self,
-        _state: &mut CircuitInputStateRef,
-        geth_steps: &[GethExecStep],
-    ) -> Result<Memory, Error> {
-        //step.mem needed by push_call;
-        // TODO: huaqing
-        Ok(geth_steps[0].memory.borrow().clone())
-    }
 }
 
 fn dummy_gen_call_ops(
     state: &mut CircuitInputStateRef,
     geth_steps: &[GethExecStep],
 ) -> Result<Vec<ExecStep>, Error> {
+    let minimal_length = call_reconstruct_memory(state, geth_steps)?;
+    // we need to keep the memory until parse_call complete
+    let call_ctx = state.call_ctx_mut()?;
+    call_ctx.memory.extend_at_least(minimal_length);
+
     let geth_step = &geth_steps[0];
     let mut exec_step = state.new_step(geth_step)?;
     let tx_id = state.tx_ctx.id();

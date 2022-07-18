@@ -388,10 +388,10 @@ pub fn fix_geth_trace_memory_size(trace: &mut [GethExecStep]) {
         let step = &trace[i];
         mem_sizes[i] = match step.depth as isize - step_prev.depth as isize {
             // Same call context
-            0 => step_prev.memory.borrow().len(),
+            0 => step_prev.memory.len(),
             // into new call context
             1 => {
-                call_mem_size_stack.push(step_prev.memory.borrow().len());
+                call_mem_size_stack.push(step_prev.memory.len());
                 0
             }
             // return from call context
@@ -400,7 +400,7 @@ pub fn fix_geth_trace_memory_size(trace: &mut [GethExecStep]) {
         };
     }
     for i in 0..trace.len() {
-        let memory: &mut Memory = trace[i].memory.get_mut();
+        let memory: &mut Memory = &mut trace[i].memory;
         memory.0.truncate(mem_sizes[i]);
     }
 }

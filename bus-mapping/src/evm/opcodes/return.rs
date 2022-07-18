@@ -23,7 +23,7 @@ impl Opcode for Return {
         let memory = state.call_ctx()?.memory.clone();
         // skip reconstruction for root-level return/revert
         if !current_call.is_root {
-            let caller = state.caller()?.clone();
+            let _caller = state.caller()?.clone();
             if !current_call.is_create() {
                 // handle normal return/revert
                 // copy return data
@@ -41,7 +41,6 @@ impl Opcode for Return {
                 caller_ctx
                     .return_data
                     .copy_from_slice(&memory.0[offset..offset + length]);
-
             } else {
                 // dealing with contract creation
                 assert!(offset + length <= memory.0.len());
