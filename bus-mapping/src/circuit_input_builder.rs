@@ -26,7 +26,7 @@ use ethers_providers::JsonRpcClient;
 pub use execution::{CopyDetails, ExecState, ExecStep, StepAuxiliaryData};
 use hex::decode_to_slice;
 pub use input_state_ref::CircuitInputStateRef;
-use std::collections::HashMap;
+use std::collections::{HashMap, BTreeMap};
 pub use transaction::{Transaction, TransactionContext};
 
 /// Builder to generate a complete circuit input from data gathered from a geth
@@ -140,7 +140,7 @@ impl<'a> CircuitInputBuilder {
         geth_traces: &[eth_types::GethExecTrace],
     ) -> Result<(), Error> {
         // accumulates gas across all txs in the block
-        let mut cumulative_gas_used = HashMap::new();
+        let mut cumulative_gas_used = BTreeMap::new();
         for (tx_index, tx) in eth_block.transactions.iter().enumerate() {
             let geth_trace = &geth_traces[tx_index];
             if geth_trace.struct_logs.is_empty() {
@@ -151,6 +151,7 @@ impl<'a> CircuitInputBuilder {
                 log::warn!("Creation transaction is left unimplemented");
                 continue;
             }
+            log::info!("handling {}th tx {:?}", tx.transaction_index.unwrap_or_default(), tx.hash);
             self.handle_tx(
                 tx,
                 geth_trace,
@@ -172,7 +173,7 @@ impl<'a> CircuitInputBuilder {
         eth_tx: &eth_types::Transaction,
         geth_trace: &GethExecTrace,
         is_last_tx: bool,
-        cumulative_gas_used: &mut HashMap<usize, u64>,
+        cumulative_gas_used: &mut BTreeMap<usize, u64>,
     ) -> Result<(), Error> {
         let mut tx = self.new_tx(eth_tx, !geth_trace.failed)?;
         let mut tx_ctx = TransactionContext::new(eth_tx, geth_trace, is_last_tx)?;

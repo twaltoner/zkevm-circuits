@@ -14,7 +14,7 @@ use eth_types::{
 };
 use keccak256::EMPTY_HASH;
 use log::warn;
-use std::collections::HashMap;
+use std::collections::{HashMap, BTreeMap};
 use std::ops::Deref;
 
 mod balance;
@@ -435,7 +435,7 @@ pub fn gen_begin_tx_ops(state: &mut CircuitInputStateRef) -> Result<ExecStep, Er
 
 pub fn gen_end_tx_ops(
     state: &mut CircuitInputStateRef,
-    cumulative_gas_used: &mut HashMap<usize, u64>,
+    cumulative_gas_used: &mut BTreeMap<usize, u64>,
 ) -> Result<ExecStep, Error> {
     let mut exec_step = state.new_end_tx_step();
     let call = state.tx.calls()[0].clone();
@@ -516,9 +516,10 @@ pub fn gen_end_tx_ops(
 
     let gas_used = state.tx.gas - exec_step.gas_left.0;
     let mut current_cumulative_gas_used: u64 = 0;
+
     if state.tx_ctx.id() > 1 {
-        current_cumulative_gas_used = *cumulative_gas_used.get(&(state.tx_ctx.id() - 1)).unwrap();
-        // query pre tx cumulative gas
+        //current_cumulative_gas_used = *cumulative_gas_used.get(&(state.tx_ctx.id() - 1)).unwrap_or(&current_cumulative_gas_used);
+        current_cumulative_gas_used = *cumulative_gas_used.last_key_value().unwrap().1;
         state.tx_receipt_read(
             &mut exec_step,
             state.tx_ctx.id() - 1,
