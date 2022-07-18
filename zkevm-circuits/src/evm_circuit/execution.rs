@@ -1123,11 +1123,11 @@ impl<F: Field> ExecutionConfig<F> {
                     rw,
                     rw_idx, idx, step);
                 log::error!("assigned_rw_values {:?}", assigned_rw_values);
-                for rw_idx in step.rw_indices {
+                for rw_idx in &step.rw_indices {
                     log::error!(
                         "step rw {:?} rlc {:?}",
-                        block.rws[rw_idx],
-                        block.rws[rw_idx]
+                        block.rws[*rw_idx],
+                        block.rws[*rw_idx]
                             .table_assignment(block.randomness)
                             .rlc(block.randomness, block.randomness)
                     );
