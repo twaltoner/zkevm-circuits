@@ -295,29 +295,8 @@ pub fn gen_associated_ops(
             }
         }
         state.call_ctx_mut()?.memory = memory;
-        /*
-        log::info!(
-            "MEM depth {} next depth {} state len {} next mem len {}  state {:?} next mem {:?}",
-            geth_steps[0].depth,
-            geth_steps[1].depth,
-            state.call_ctx_mut()?.memory.len(),
-            geth_steps[1].memory.borrow().len(),
-            state.call_ctx_mut()?.memory,
-            geth_steps[1].memory.borrow().clone()
-        );
-        */
-        if geth_steps[0].depth == geth_steps[1].depth {
-            if state.call_ctx_mut()?.memory != geth_steps[1].memory.borrow().clone() {
-                log::error!(
-                    "state {:?} next {:?}",
-                    state.call_ctx_mut()?.memory,
-                    geth_steps[1].memory
-                );
-            }
-        }
     }
     let steps = opcode.gen_associated_ops(state, geth_steps)?;
-    log::trace!("opcode steps result: {:?}", steps);
     // release after use
     geth_steps[0].memory.replace(Memory::default());
     Ok(steps)

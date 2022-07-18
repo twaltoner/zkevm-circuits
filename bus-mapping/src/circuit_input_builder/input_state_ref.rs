@@ -507,10 +507,6 @@ impl<'a> CircuitInputStateRef<'a> {
             }
             CallKind::Create | CallKind::Create2 => Vec::new(),
         };
-        println!(
-            "push call call {:?} step {:?} call_data {:?}",
-            call, step, call_data
-        );
         let call_id = call.call_id;
         let call_idx = self.tx.calls().len();
 
@@ -639,7 +635,6 @@ impl<'a> CircuitInputStateRef<'a> {
             return_data_offset,
             return_data_length,
         };
-        println!("result of parse_call {:?}", call);
 
         Ok(call)
     }

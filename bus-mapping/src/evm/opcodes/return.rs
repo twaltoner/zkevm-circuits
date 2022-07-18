@@ -41,21 +41,12 @@ impl Opcode for Return {
                 // copy return data
                 // update to the caller memory
                 let caller_ctx = state.caller_ctx_mut()?;
-                println!("call {:?} ", current_call);
-                println!("caller_call {:?}", caller);
-                println!("in return  reconstruct_memory");
-                println!("before caller_ctx.memory {:?}", caller_ctx.memory);
-                println!(
-                    "current_call.return_data_offset {} length {} ",
-                    current_call.return_data_offset, length
-                );
                 let return_offset = current_call.return_data_offset as usize;
                 caller_ctx
                     .memory
                     .extend_at_least(return_offset + current_call.return_data_length as usize);
                 let copy_len = std::cmp::min(current_call.return_data_length as usize, length);
 
-                println!("current_call.return_data_offset {} current_call.return_data_length {} copy_len {}", current_call.return_data_offset, current_call.return_data_length, copy_len);
                 caller_ctx.memory.0[return_offset..return_offset + copy_len]
                     .copy_from_slice(&memory.0[offset..offset + copy_len]);
 
@@ -63,10 +54,7 @@ impl Opcode for Return {
                 caller_ctx
                     .return_data
                     .copy_from_slice(&memory.0[offset..offset + length]);
-                println!(
-                    "after rebuild caller_ctx.memory {:?} caller_ctx.return_data {:?}",
-                    caller_ctx.memory, caller_ctx.return_data
-                );
+                
                 caller_ctx.last_call = Some(current_call);
             } else {
                 // dealing with contract creation
