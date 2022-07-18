@@ -772,7 +772,7 @@ impl<F: Field> ExecutionConfig<F> {
                             tt.call_data.clear();
                             tt.calls.clear();
                             tt.steps.clear();
-                            log::info!("assign last step of tx {:?}", tt);
+                            log::info!("offset {} assign last step of tx {:?}", offset, tt);
                         }
                     } else {
                         log::info!("assign last step of block");
