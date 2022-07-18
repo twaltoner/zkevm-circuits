@@ -1113,16 +1113,28 @@ impl<F: Field> ExecutionConfig<F> {
             let rw = block.rws[rw_idx];
             let table_assignments = rw.table_assignment(block.randomness);
             let rlc = table_assignments.rlc(block.randomness, block.randomness);
-            debug_assert_eq!(
-                rlc, assigned_rw_values[idx].1,
-                "incorrect rw witness. input: value {:?}, name {}. table: value {:?}, table_assignments {:?}, rw {:?}, index {:?}, {}th rw of step {:?}.",
-                assigned_rw_values[idx].1,
-                assigned_rw_values[idx].0,
-                rlc,
-                table_assignments,
-                rw,
-                rw_idx, idx, step
-            )
+            if rlc != assigned_rw_values[idx].1 {
+                log::error!(
+                    "incorrect rw witness. input: value {:?}, name {}. table: value {:?}, table_assignments {:?}, rw {:?}, index {:?}, {}th rw of step {:?}.",
+                    assigned_rw_values[idx].1,
+                    assigned_rw_values[idx].0,
+                    rlc,
+                    table_assignments,
+                    rw,
+                    rw_idx, idx, step);
+                log::error!("assigned_rw_values {:?}", assigned_rw_values);
+                for rw_idx in step.rw_indices {
+                    log::error!(
+                        "step rw {:?} rlc {:?}",
+                        block.rws[rw_idx],
+                        block.rws[rw_idx]
+                            .table_assignment(block.randomness)
+                            .rlc(block.randomness, block.randomness)
+                    );
+                }
+
+                debug_assert_eq!(rlc, assigned_rw_values[idx].1);
+            }
         }
     }
 }

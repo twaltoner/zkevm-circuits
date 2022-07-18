@@ -14,7 +14,7 @@ use eth_types::{
 };
 use keccak256::EMPTY_HASH;
 use log::warn;
-use std::collections::{HashMap, BTreeMap};
+use std::collections::{BTreeMap, HashMap};
 use std::ops::Deref;
 
 mod balance;
@@ -518,7 +518,8 @@ pub fn gen_end_tx_ops(
     let mut current_cumulative_gas_used: u64 = 0;
 
     if state.tx_ctx.id() > 1 {
-        //current_cumulative_gas_used = *cumulative_gas_used.get(&(state.tx_ctx.id() - 1)).unwrap_or(&current_cumulative_gas_used);
+        //current_cumulative_gas_used = *cumulative_gas_used.get(&(state.tx_ctx.id() -
+        // 1)).unwrap_or(&current_cumulative_gas_used);
         current_cumulative_gas_used = *cumulative_gas_used.last_key_value().unwrap().1;
         state.tx_receipt_read(
             &mut exec_step,

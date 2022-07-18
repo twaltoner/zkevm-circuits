@@ -26,7 +26,7 @@ use ethers_providers::JsonRpcClient;
 pub use execution::{CopyDetails, ExecState, ExecStep, StepAuxiliaryData};
 use hex::decode_to_slice;
 pub use input_state_ref::CircuitInputStateRef;
-use std::collections::{HashMap, BTreeMap};
+use std::collections::{BTreeMap, HashMap};
 pub use transaction::{Transaction, TransactionContext};
 
 /// Builder to generate a complete circuit input from data gathered from a geth
@@ -151,7 +151,11 @@ impl<'a> CircuitInputBuilder {
                 log::warn!("Creation transaction is left unimplemented");
                 continue;
             }
-            log::info!("handling {}th tx {:?}", tx.transaction_index.unwrap_or_default(), tx.hash);
+            log::info!(
+                "handling {}th tx {:?}",
+                tx.transaction_index.unwrap_or_default(),
+                tx.hash
+            );
             let mut tx = tx.clone();
             tx.transaction_index = Some(self.block.txs.len().into());
             self.handle_tx(

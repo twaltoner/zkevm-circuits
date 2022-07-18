@@ -54,7 +54,7 @@ impl Opcode for Return {
                 caller_ctx
                     .return_data
                     .copy_from_slice(&memory.0[offset..offset + length]);
-                
+
                 caller_ctx.last_call = Some(current_call);
             } else {
                 // dealing with contract creation
