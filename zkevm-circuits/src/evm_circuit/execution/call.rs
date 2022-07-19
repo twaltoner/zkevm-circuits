@@ -335,10 +335,22 @@ impl<F: Field> ExecutionGadget<F> for CallGadget<F> {
         region: &mut CachedRegion<'_, '_, F>,
         offset: usize,
         block: &Block<F>,
-        _: &Transaction,
+        tx: &Transaction,
         call: &Call,
         step: &ExecStep,
     ) -> Result<(), Error> {
+        debug_assert_eq!(
+            step.opcode.unwrap(),
+            OpcodeId::CALL,
+            "offset {} step {:?} call {:?} tx {:?}",
+            offset,
+            step,
+            call,
+            tx
+        );
+        if step.rw_indices.len() < 21 {
+            assert!(false, "invalid rw len {} {:?}", step.rw_indices.len(), step);
+        }
         let [tx_id, current_address, is_static, depth, callee_rw_counter_end_of_reversion, callee_is_persistent] =
             [
                 step.rw_indices[0],

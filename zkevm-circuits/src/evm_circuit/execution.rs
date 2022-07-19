@@ -788,6 +788,17 @@ impl<F: Field> ExecutionConfig<F> {
                         next,
                         power_of_randomness,
                     )?;
+                    if let Some(&(t, _c, _s)) = next {
+                        if t != transaction {
+                            let mut tt = transaction.clone();
+                            tt.call_data.clear();
+                            tt.calls.clear();
+                            tt.steps.clear();
+                            log::info!("DONE offset {} assign last step of tx {:?}", offset, tt);
+                        }
+                    } else {
+                        log::info!("DONE assign last step of block");
+                    }
                     // q_step logic
                     for idx in 0..height {
                         let offset = offset + idx;
@@ -860,6 +871,7 @@ impl<F: Field> ExecutionConfig<F> {
 
                 if !exact {
                     if block.pad_to != 0 {
+                        log::info!("pad block height to {}", block.pad_to);
                         // Pad leftover region to the desired capacity
                         if offset >= block.pad_to {
                             panic!("row not enough");
@@ -876,10 +888,12 @@ impl<F: Field> ExecutionConfig<F> {
                         log::warn!("assign_block with exact = false, but pad_to not provided");
                     }
                 }
-
+                log::info!("Execution step assign done");
                 Ok(())
             },
-        )
+        )?;
+        log::info!("assign_block done");
+        Ok(())
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1097,7 +1111,14 @@ impl<F: Field> ExecutionConfig<F> {
         let assigned_stored_expressions = self.assign_stored_expressions(region, offset, step)?;
 
         if true || !is_dummy {
-            Self::check_rw_lookup(&assigned_stored_expressions, step, block);
+            Self::check_rw_lookup(
+                &assigned_stored_expressions,
+                offset,
+                step,
+                call,
+                transaction,
+                block,
+            );
         }
         Ok(())
     }
@@ -1124,7 +1145,10 @@ impl<F: Field> ExecutionConfig<F> {
     }
     fn check_rw_lookup(
         assigned_stored_expressions: &Vec<(String, F)>,
+        offset: usize,
         step: &ExecStep,
+        call: &Call,
+        transaction: &Transaction,
         block: &Block<F>,
     ) {
         let mut assigned_rw_values = Vec::new();
@@ -1146,14 +1170,6 @@ impl<F: Field> ExecutionConfig<F> {
             let table_assignments = rw.table_assignment(block.randomness);
             let rlc = table_assignments.rlc(block.randomness, block.randomness);
             if rlc != assigned_rw_values[idx].1 {
-                log::error!(
-                    "incorrect rw witness. input: value {:?}, name {}. table: value {:?}, table_assignments {:?}, rw {:?}, index {:?}, {}th rw of step {:?}.",
-                    assigned_rw_values[idx].1,
-                    assigned_rw_values[idx].0,
-                    rlc,
-                    table_assignments,
-                    rw,
-                    rw_idx, idx, step);
                 log::error!("assigned_rw_values {:?}", assigned_rw_values);
                 for rw_idx in &step.rw_indices {
                     log::error!(
@@ -1164,6 +1180,26 @@ impl<F: Field> ExecutionConfig<F> {
                             .rlc(block.randomness, block.randomness)
                     );
                 }
+                let mut tx = transaction.clone();
+                tx.call_data.clear();
+                tx.calls.clear();
+                tx.steps.clear();
+                log::error!(
+                    "ctx: offset {} step {:?}. call: {:?}, tx: {:?}, block number {:?}",
+                    offset,
+                    step,
+                    call,
+                    tx,
+                    block.context.number
+                );
+                log::error!(
+                    "incorrect rw witness. input: value {:?}, name {}. table: value {:?}, table_assignments {:?}, rw {:?}, index {:?}, {}th rw of step",
+                    assigned_rw_values[idx].1,
+                    assigned_rw_values[idx].0,
+                    rlc,
+                    table_assignments,
+                    rw,
+                    rw_idx, idx);
 
                 debug_assert_eq!(rlc, assigned_rw_values[idx].1);
             }

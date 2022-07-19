@@ -411,7 +411,7 @@ impl<'a> CircuitInputStateRef<'a> {
         )?;
 
         // FIXME: is this correct?
-        if !self.is_precompiled(&receiver) {
+        if true || !self.is_precompiled(&receiver) {
             let (found, receiver_account) = self.sdb.get_account(&receiver);
             if !found {
                 return Err(Error::AccountNotFound(receiver));

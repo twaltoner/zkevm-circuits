@@ -287,14 +287,31 @@ pub fn gen_associated_ops(
 
     let memory_enabled = !geth_steps.iter().all(|s| s.memory.is_empty());
     if memory_enabled {
-        assert_eq!(
-            &state.call_ctx()?.memory,
-            &geth_steps[0].memory,
-            "last step of {:?} goes wrong. len in state {}, len in step0 {}",
-            opcode_id,
-            &state.call_ctx()?.memory.len(),
-            &geth_steps[0].memory.len(),
-        );
+        let check_level = 1; // 0: no check, 1: check and log error and fix, 2: check and assert_eq
+        match check_level {
+            1 => {
+                if state.call_ctx()?.memory != geth_steps[0].memory {
+                    log::error!("wrong mem: {:?} goes wrong. len in state {}, len in step0 {}. state mem {:?} step mem {:?}",
+                    opcode_id,
+                    &state.call_ctx()?.memory.len(),
+                    &geth_steps[0].memory.len(),
+                    &state.call_ctx()?.memory,
+                    &geth_steps[0].memory);
+                    state.call_ctx_mut()?.memory = geth_steps[0].memory.clone();
+                }
+            }
+            2 => {
+                assert_eq!(
+                    &state.call_ctx()?.memory,
+                    &geth_steps[0].memory,
+                    "last step of {:?} goes wrong. len in state {}, len in step0 {}",
+                    opcode_id,
+                    &state.call_ctx()?.memory.len(),
+                    &geth_steps[0].memory.len(),
+                );
+            }
+            _ => {}
+        }
     }
 
     let steps = opcode.gen_associated_ops(state, geth_steps)?;

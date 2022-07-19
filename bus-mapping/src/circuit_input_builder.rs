@@ -152,8 +152,9 @@ impl<'a> CircuitInputBuilder {
                 continue;
             }
             log::info!(
-                "handling {}th tx {:?}",
+                "handling {}th(inner idx: {}) tx {:?}",
                 tx.transaction_index.unwrap_or_default(),
+                self.block.txs.len(),
                 tx.hash
             );
             let mut tx = tx.clone();
@@ -204,11 +205,12 @@ impl<'a> CircuitInputBuilder {
         for (index, geth_step) in geth_trace.struct_logs.iter().enumerate() {
             let mut state_ref = self.state_ref(&mut tx, &mut tx_ctx);
             log::trace!(
-                "handle {}th tx depth {} {}th opcode {:?} {}",
+                "handle {}th tx depth {} {}th opcode {:?} pc: {} args: {}",
                 eth_tx.transaction_index.unwrap_or_default(),
                 geth_step.depth,
                 index,
                 geth_step.op,
+                geth_step.pc.0,
                 if geth_step.op.is_push() {
                     match geth_step.stack.last() {
                         Ok(w) => format!("{:?}", w),
