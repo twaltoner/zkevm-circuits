@@ -5,7 +5,7 @@ use crate::{
     operation::{AccountField, CallContextField, TxAccessListAccountOp, RW},
     Error,
 };
-use eth_types::evm_types::OpcodeId;
+use eth_types::evm_types::{Gas, OpcodeId};
 use eth_types::{
     evm_types::{
         gas_utils::{eip150_gas, memory_expansion_gas_cost},
@@ -130,7 +130,8 @@ impl<const N_ARGS: usize> Opcode for Call<N_ARGS> {
         let (_, callee_account) = state.sdb.get_account(&call.address);
         let is_account_empty = callee_account.is_empty();
         let callee_nonce = callee_account.nonce;
-        let callee_code_hash = callee_account.code_hash;
+        let callee_code_hash = call.code_hash;
+        debug_assert!(!callee_code_hash.is_zero());
         for (field, value) in [
             (AccountField::Nonce, callee_nonce),
             (AccountField::CodeHash, callee_code_hash.to_word()),
@@ -212,6 +213,14 @@ impl<const N_ARGS: usize> Opcode for Call<N_ARGS> {
             // 1. Call to precompiled.
             (true, _) => {
                 warn!("Call to precompiled is left unimplemented");
+
+                for (field, value) in [
+                    (CallContextField::LastCalleeId, 0.into()),
+                    (CallContextField::LastCalleeReturnDataOffset, 0.into()),
+                    (CallContextField::LastCalleeReturnDataLength, 0.into()),
+                ] {
+                    state.call_context_write(&mut exec_step, current_call.call_id, field, value);
+                }
                 state.handle_return(geth_step)?;
                 /*
                 // FIXME: is this correct?
@@ -227,6 +236,16 @@ impl<const N_ARGS: usize> Opcode for Call<N_ARGS> {
                 }
                 state.tx_ctx.pop_call_ctx();
                 */
+                let real_cost = geth_steps[0].gas.0 - geth_steps[1].gas.0;
+                if real_cost != exec_step.gas_cost.0 {
+                    log::warn!(
+                        "precompile gas fixed from {} to {}, step {:?}",
+                        exec_step.gas_cost.0,
+                        real_cost,
+                        geth_steps[0]
+                    );
+                }
+                exec_step.gas_cost = GasCost(real_cost);
                 Ok(vec![exec_step])
             }
             // 2. Call to account with empty code.

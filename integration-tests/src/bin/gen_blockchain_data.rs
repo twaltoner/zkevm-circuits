@@ -3,14 +3,11 @@ use ethers::{
     contract::{builders::ContractCall, Contract, ContractFactory},
     core::types::{
         transaction::eip2718::TypedTransaction, Address, TransactionReceipt, TransactionRequest,
-        U256, U64,
+        U256,
     },
     core::utils::WEI_IN_ETHER,
     middleware::SignerMiddleware,
-    prelude::{
-        k256::ecdsa::SigningKey, ContractError, Eip1559TransactionRequest, NonceManagerMiddleware,
-        Wallet,
-    },
+    prelude::{k256::ecdsa::SigningKey, Eip1559TransactionRequest, NonceManagerMiddleware, Wallet},
     providers::{Middleware, PendingTransaction},
     signers::Signer,
     solc::Solc,
@@ -193,7 +190,7 @@ async fn main() {
 
     let wallet_fn = |wallet0: Wallet<SigningKey>| {
         let p1 = NonceManagerMiddleware::new(get_provider(), wallet0.address());
-        let p2 = SignerMiddleware::new(p1, wallet0.clone());
+        let p2 = SignerMiddleware::new(p1, wallet0);
         Arc::new(p2)
     };
     let mut deployments = HashMap::new();
@@ -280,7 +277,6 @@ async fn main() {
     //let tx = Eip1559TransactionRequest { to: None, data: Some(data),
     // ..Default::default() }; let tx = tx.into();
 
-    use ethers::types::BlockNumber::Latest;
     let pending = ethers::prelude::BlockId::Number(Pending);
     let _tx = *wallets[0]
         .send_transaction(tx, Some(pending))
