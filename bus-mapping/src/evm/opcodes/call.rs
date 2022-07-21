@@ -259,6 +259,19 @@ impl<const N_ARGS: usize> Opcode for Call<N_ARGS> {
                     state.call_context_write(&mut exec_step, current_call.call_id, field, value);
                 }
                 state.handle_return(geth_step)?;
+
+                // FIXME
+                let real_cost = geth_steps[0].gas.0 - geth_steps[1].gas.0;
+                if real_cost != exec_step.gas_cost.0 {
+                    log::warn!(
+                        "precompile gas fixed from {} to {}, step {:?}",
+                        exec_step.gas_cost.0,
+                        real_cost,
+                        geth_steps[0]
+                    );
+                }
+                exec_step.gas_cost = GasCost(real_cost);
+                
                 Ok(vec![exec_step])
             }
             // 3. Call to account with non-empty code.

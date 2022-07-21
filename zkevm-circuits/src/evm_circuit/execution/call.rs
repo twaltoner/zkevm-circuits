@@ -342,15 +342,6 @@ impl<F: Field> ExecutionGadget<F> for CallGadget<F> {
         call: &Call,
         step: &ExecStep,
     ) -> Result<(), Error> {
-        debug_assert_eq!(
-            step.opcode.unwrap(),
-            OpcodeId::CALL,
-            "offset {} step {:?} call {:?} tx {:?}",
-            offset,
-            step,
-            call,
-            tx
-        );
         if step.rw_indices.len() < 21 {
             assert!(false, "invalid rw len {} {:?}", step.rw_indices.len(), step);
         }
@@ -467,11 +458,6 @@ impl<F: Field> ExecutionGadget<F> for CallGadget<F> {
             ],
         )?;
 
-        log::info!(
-            "CALL callee_code_hash {:?}, empty {:?}",
-            callee_code_hash.to_le_bytes(),
-            *EMPTY_HASH_LE
-        );
         self.is_empty_code_hash.assign(
             region,
             offset,
@@ -495,7 +481,7 @@ impl<F: Field> ExecutionGadget<F> for CallGadget<F> {
         } + memory_expansion_gas_cost;
         let gas_available = step.gas_left - gas_cost;
         self.gas_cost
-            .assign(region, offset, Some(F::from(step.gas_cost)));
+            .assign(region, offset, Some(F::from(step.gas_cost)))?;
         self.one_64th_gas
             .assign(region, offset, gas_available as u128)?;
         self.capped_callee_gas_left.assign(
