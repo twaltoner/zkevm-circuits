@@ -271,7 +271,7 @@ impl<const N_ARGS: usize> Opcode for Call<N_ARGS> {
                     );
                 }
                 exec_step.gas_cost = GasCost(real_cost);
-                
+
                 Ok(vec![exec_step])
             }
             // 3. Call to account with non-empty code.

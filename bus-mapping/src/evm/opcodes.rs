@@ -10,7 +10,7 @@ use crate::{
 use core::fmt::Debug;
 use eth_types::{
     evm_types::{GasCost, MAX_REFUND_QUOTIENT_OF_GAS_USED},
-    GethExecStep, ToAddress, ToWord, Word,
+    GethExecStep, ToAddress, ToWord, Word, U256,
 };
 use keccak256::EMPTY_HASH;
 use log::warn;
@@ -359,7 +359,12 @@ pub fn gen_begin_tx_ops(state: &mut CircuitInputStateRef) -> Result<ExecStep, Er
 
     // Increase caller's nonce
     let caller_address = call.caller_address;
-    let nonce_prev = state.sdb.increase_nonce(&caller_address);
+    let mut nonce_prev = state.sdb.increase_nonce(&caller_address);
+    debug_assert!(nonce_prev <= state.tx.nonce);
+    while nonce_prev < state.tx.nonce {
+        nonce_prev = state.sdb.increase_nonce(&caller_address);
+        log::warn!("[debug] increase nonce to {}", nonce_prev);
+    }
     state.account_write(
         &mut exec_step,
         caller_address,
