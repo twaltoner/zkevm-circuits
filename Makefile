@@ -23,21 +23,21 @@ test: ## Run tests for all the workspace members
 test_doc: ## Test the docs
 	@cargo test --release --all --all-features --doc
 
-test_benches: ## Compiles the benchmarks
+test_benches: 
 	@cargo test --verbose --release --all-features -p circuit-benchmarks --no-run
 
-test-all: fmt doc clippy test_doc test_benches test ## Run all the CI checks locally (in your actual toolchain) 
+test-all: fmt doc clippy test_doc test_benches test  
 
-evm_bench: ## Run Evm Circuit benchmarks
+evm_bench: 
 	@cargo test --profile bench bench_evm_circuit_prover -p circuit-benchmarks --features benches  -- --nocapture
 
-state_bench: ## Run State Circuit benchmarks
+state_bench: 
 	@cargo test --profile bench bench_state_circuit_prover -p circuit-benchmarks --features benches  -- --nocapture
 
-keccak_round_bench: ## Run State Circuit benchmarks
+keccak_round_bench: 
 	@cargo test --profile bench bench_keccak_round -p circuit-benchmarks --features benches  -- --nocapture
 
-circuit_benches: evm_bench state_bench ## Run All Circuit benchmarks
+circuit_benches: evm_bench state_bench 
 
 
 .PHONY: clippy doc fmt test test_benches test-all evm_bench state_bench circuit_benches help
